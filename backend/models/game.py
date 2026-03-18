@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import List, Optional, Literal, Dict
+from typing import List, Optional, Dict
 
 from pydantic import BaseModel, Field
 
+from backend.models.chat import ChatMessage
+from backend.models.directive import Directive, Report
 
 class Team(str, Enum):
     CITIZEN = "citizen"
@@ -45,35 +47,10 @@ class Player(BaseModel):
     ability_used: bool = False
 
 
-class ChatMessage(BaseModel):
-    id: str
-    sender: str
-    content: str
-    channel: str  # "global" | "mafia_secret" | "system" | ...
-    timestamp: datetime
-    is_ai: bool = True
-
-
 class GameEvent(BaseModel):
     type: str
     payload: Dict[str, object] = Field(default_factory=dict)
     timestamp: datetime = Field(default_factory=datetime.utcnow)
-
-
-class Directive(BaseModel):
-    target_agent: str
-    sender: str
-    type: str
-    content: str
-    priority: Literal["low", "medium", "high"] = "medium"
-    round: int
-
-
-class Report(BaseModel):
-    agent_id: str
-    content: str
-    round: int
-    created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
 class GameState(BaseModel):

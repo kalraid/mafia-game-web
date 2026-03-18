@@ -58,7 +58,6 @@ class MCPGameTools:
                 agent_id=agent_id,
                 content=report,
                 round=state.round,
-                created_at=None,  # Phase 5 스켈레톤: 실제 타임스탬프는 후속에서 채움
             )
         )
         return True
