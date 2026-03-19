@@ -1,7 +1,11 @@
 import streamlit as st
 import requests
+import os
 from datetime import datetime
 from frontend.utils import handle_request_error
+
+# Use environment variable for containerized setup, with a fallback for local dev
+BACKEND_URL = os.environ.get("BACKEND_URL", "http://localhost:8000")
 
 def _draw_message(msg, my_name, dead_players, highlight_player, phase):
     sender = msg.get("sender", "System")
@@ -10,40 +14,24 @@ def _draw_message(msg, my_name, dead_players, highlight_player, phase):
     timestamp = msg.get("timestamp", datetime.now().strftime("%H:%M"))
 
     class_list = ["chat-message"]
-    sender_display = sender
+    
+    # In the new G-6 CSS, the message header is gone, so this logic is simplified.
+    # We still use the classes to apply different background colors.
     is_dead_sender = sender in dead_players
-
     if is_dead_sender:
         class_list.append("dead-message")
-    
-    if phase == "day_chat" and highlight_player and sender == highlight_player:
-        class_list.append("highlight-message")
 
     if sender == "System":
         class_list.append("system-message")
-        st.markdown(f'<div class="{" ".join(class_list)}">{content}</div>', unsafe_allow_html=True)
-        return
     elif sender == my_name:
         class_list.append("my-message")
-        sender_display = f"🟢 {my_name}"
     elif channel == "mafia_secret":
         class_list.append("mafia-message")
-        sender_display = f"🔴 {sender} (마피아)"
     else:
         class_list.append("other-message")
-        sender_display = f"👤 {sender}"
 
-    st.markdown(f"""
-        <div class="{" ".join(class_list)}">
-            <div class="message-header">
-                <span>{sender_display}</span>
-                <span>{timestamp}</span>
-            </div>
-            <div class="message-content">
-                {content}
-            </div>
-        </div>
-    """, unsafe_allow_html=True)
+    st.markdown(f'<div class="{" ".join(class_list)}">{content}</div>', unsafe_allow_html=True)
+
 
 def draw_chat_area():
     st.header("Chat")
@@ -61,20 +49,21 @@ def draw_chat_area():
     dead_players = {p["name"] for p in players if not p.get("is_alive", True)}
     
     is_night = "night" in phase
-    # As per WORK_ORDER, my_role can be 'killer'
     is_mafia = my_role in ["mafia", "killer"]
 
     def render_chat_list(messages):
         st.markdown('<div class="chat-container">', unsafe_allow_html=True)
         for msg in messages:
+            # The new G-6 CSS simplifies message structure, so we adapt the call
             _draw_message(msg, my_name, dead_players, highlight_player, phase)
         st.markdown('</div>', unsafe_allow_html=True)
         # JS for auto-scrolling
         st.markdown("""
             <script>
-                const chatContainer = window.parent.document.querySelector('.chat-container:last-child');
-                if (chatContainer) {
-                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                const chatContainers = window.parent.document.querySelectorAll('.chat-container');
+                if (chatContainers.length > 0) {
+                    const lastChatContainer = chatContainers[chatContainers.length - 1];
+                    lastChatContainer.scrollTop = lastChatContainer.scrollHeight;
                 }
             </script>
         """, unsafe_allow_html=True)
@@ -96,7 +85,7 @@ def draw_chat_area():
                 if mafia_chat_input:
                     try:
                         response = requests.post(
-                            f"http://localhost:8000/game/{game_id}/chat",
+                            f"{BACKEND_URL}/game/{game_id}/chat",
                             json={"sender": my_name, "content": mafia_chat_input, "channel": "mafia_secret"}
                         )
                         response.raise_for_status()
@@ -108,14 +97,13 @@ def draw_chat_area():
         render_chat_list(global_chats)
 
         # Message Input for global chat
-        # Disable chat input during non-chat phases
         is_chat_phase = phase in ["day_chat"]
         chat_input = st.text_input("메시지를 입력하세요...", key="chat_input", disabled=not is_chat_phase)
         if st.button("전송", key="chat_send", disabled=not is_chat_phase):
             if chat_input:
                 try:
                     response = requests.post(
-                        f"http://localhost:8000/game/{game_id}/chat",
+                        f"{BACKEND_URL}/game/{game_id}/chat",
                         json={"sender": my_name, "content": chat_input, "channel": "global"}
                     )
                     response.raise_for_status()

@@ -1,5 +1,6 @@
 import streamlit as st
 import json
+import os
 from pages.lobby import draw_lobby
 from pages.game import draw_game
 from pages.result import draw_result
@@ -18,7 +19,9 @@ if "page" not in st.session_state:
     st.session_state.game_state = {"phase": "day"} # Default to day
 
 # WebSocket Connection
-ws_url = f"ws://localhost:8000/ws/{st.session_state.game_id}"
+# Use environment variable for containerized setup, with a fallback for local dev
+ws_base_url = os.environ.get("WS_URL", "ws://localhost:8000")
+ws_url = f"{ws_base_url}/ws/{st.session_state.game_id}"
 messages = streamlit_websocket_client(url=ws_url)
 
 def handle_message(message):

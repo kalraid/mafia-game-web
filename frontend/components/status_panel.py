@@ -1,7 +1,11 @@
 import streamlit as st
 import requests
+import os
 from components.player_card import draw_player_card
 from frontend.utils import handle_request_error
+
+# Use environment variable for containerized setup, with a fallback for local dev
+BACKEND_URL = os.environ.get("BACKEND_URL", "http://localhost:8000")
 
 def draw_status_panel():
     # Handle selection from query parameters, which is set by clicking a player card
@@ -139,7 +143,7 @@ def draw_status_panel():
                         target_name = st.session_state.selection
                         
                         response = requests.post(
-                            f"http://localhost:8000/game/{game_id}/vote",
+                            f"{BACKEND_URL}/game/{game_id}/vote",
                             json={"voter": my_name, "voted_for": target_name}
                         )
                         response.raise_for_status()
@@ -158,7 +162,7 @@ def draw_status_panel():
                     game_id = st.session_state.get("game_id", "test_game")
                     
                     response = requests.post(
-                        f"http://localhost:8000/game/{game_id}/vote",
+                        f"{BACKEND_URL}/game/{game_id}/vote",
                         json={"voter": my_name, "voted_for": None}
                     )
                     response.raise_for_status()
@@ -185,7 +189,7 @@ def draw_status_panel():
                         target_name = st.session_state.selection
                         
                         response = requests.post(
-                            f"http://localhost:8000/game/{game_id}/ability",
+                            f"{BACKEND_URL}/game/{game_id}/ability",
                             json={"player_name": my_name, "ability": ability_name, "target": target_name}
                         )
                         response.raise_for_status()

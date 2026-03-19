@@ -1,51 +1,32 @@
 import streamlit as st
 
 def draw_result():
-    st.title("게임 종료!")
-
     game_state = st.session_state.get("game_state", {})
-    winner = game_state.get("winner", "Unknown")
-    reason = game_state.get("reason", "The game has ended.")
+    winner = game_state.get("winner", "unknown")
+    reason = game_state.get("reason", "")
     players = game_state.get("players", [])
 
-    if winner == "citizen":
-        st.header("🏆 시민 진영 승리!")
-    elif winner == "mafia":
-        st.header("🏆 마피아 진영 승리!")
-    else:
-        st.header(f"🏆 {winner} 승리!")
-
-    st.write(reason)
-
-    st.markdown("---")
-    st.subheader("최종 직업 공개:")
-
-    cause_map = {
-        "vote": "투표",
-        "night_attack": "밤 공격",
+    winner_text = {
+        "citizen": "🏆 시민 진영 승리!",
+        "mafia": "💀 마피아 승리!",
+        "jester": "🎭 광대 단독 승리!"
     }
+    st.title(winner_text.get(winner, "게임 종료!"))
+    st.caption(reason)
+    st.divider()
 
-    for player in players:
-        role = player.get("role", "Unknown")
-        name = player.get("name", "Unknown")
+    st.subheader("최종 직업 공개")
+    for p in players:
+        status = "✅ 생존" if p.get("is_alive") else f"💀 {p.get('death_round', '?')}라운드 사망"
+        cause = p.get("death_cause", "")
+        cause_text = {"vote": "(투표 처형)", "mafia": "(마피아 공격)"}.get(cause, "")
+        st.write(f"**{p['name']}** — {p.get('role', '?')} | {status} {cause_text}")
 
-        if player.get("is_alive", True):
-            status_text = f"✅ 생존"
-        else:
-            death_round = player.get("death_round", "")
-            death_cause = player.get("death_cause", "")
-            cause_text = cause_map.get(death_cause, death_cause)
-            status_text = f"💀 ({death_round}라운드 {cause_text} 사망)"
-
-        st.write(f"**{name}** → {role} {status_text}")
-
-    st.markdown("---")
-
+    st.divider()
     col1, col2 = st.columns(2)
     with col1:
         if st.button("다시 하기"):
-            # This would ideally reset the game state on the server
-            st.session_state.page = "game"
+            st.session_state.page = "lobby"
             st.rerun()
     with col2:
         if st.button("로비로 돌아가기"):

@@ -4,7 +4,7 @@ def draw_player_card(player_name, is_alive=True, is_me=False, votes=0, disabled=
     """
     Draws a player card using st.markdown for full CSS styling.
     The card is made clickable by wrapping it in an <a> tag that sets a query parameter.
-    If the player is dead and a role is provided, it's shown in the overlay.
+    If the player is dead, the 'dead-overlay' class is added to trigger the CSS ::after pseudo-element.
     Shows a silent icon if the player has been silent.
     """
     
@@ -12,11 +12,16 @@ def draw_player_card(player_name, is_alive=True, is_me=False, votes=0, disabled=
     class_list = ["player-card"]
     if is_me:
         class_list.append("is-me")
+    
     if not is_alive:
-        class_list.append("is-dead")
-    if disabled and is_alive: # Don't apply to dead players, already styled
+        # The new CSS uses a pseudo-element on the 'dead-overlay' class
+        class_list.append("dead-overlay")
+        
+    if disabled and is_alive:
         class_list.append("is-disabled")
     
+    # The 'is-suspected' classes seem to be from an older design and are not in the new G-6 CSS.
+    # I will keep the logic in case they are re-introduced later.
     if votes > 0 and is_alive:
         suspicion_level = min(votes, 3)
         class_list.append(f"is-suspected-{suspicion_level}")
@@ -36,19 +41,12 @@ def draw_player_card(player_name, is_alive=True, is_me=False, votes=0, disabled=
     # The link is disabled via CSS if needed
     href = f"?select={player_name}" if not disabled and is_alive else "#"
 
-    # Generate the death overlay HTML if the player is not alive
-    dead_overlay_html = ""
-    if not is_alive:
-        dead_text = "사망"
-        if role:
-            dead_text += f"<br><small>({role})</small>"
-        dead_overlay_html = f'<div class="death-overlay">{dead_text}</div>'
-
+    # The death overlay is now handled entirely by CSS via the .dead-overlay::after pseudo-element.
+    # The role is no longer displayed on the card as per the new simpler CSS design in G-6.
     st.markdown(f'''
         <a href="{href}" target="_self" class="player-card-link">
             <div class="{class_str}">
                 {label}
-                {dead_overlay_html}
             </div>
         </a>
     ''', unsafe_allow_html=True)
