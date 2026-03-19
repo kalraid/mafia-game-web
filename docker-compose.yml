@@ -3,7 +3,7 @@ version: "3.9"
 # ============================================================
 # AI Mafia Online — docker-compose.yml
 # 관리자: Claude AI (기획자 + 인프라 엔지니어)
-# Dockerfile 작성: Cursor(backend), Gemini(frontend)
+# Dockerfile 작성: Cursor(backend/Dockerfile), Gemini(frontend/Dockerfile)
 # ============================================================
 
 services:
@@ -25,12 +25,13 @@ services:
 
   # ----------------------------------------------------------
   # Backend — FastAPI + LangGraph + LangChain
-  # Dockerfile: Dockerfile (루트, Cursor 담당)
+  # Dockerfile: backend/Dockerfile (Cursor 담당)
+  # b6d9fe1에서 루트 Dockerfile → backend/Dockerfile로 이동
   # ----------------------------------------------------------
   backend:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: backend/Dockerfile
     container_name: mafia-backend
     env_file:
       - .env
@@ -44,6 +45,7 @@ services:
         condition: service_healthy
     environment:
       - REDIS_URL=redis://redis:6379
+      - MAFIA_USE_REDIS_CHECKPOINTER=1
     restart: unless-stopped
 
   # ----------------------------------------------------------
