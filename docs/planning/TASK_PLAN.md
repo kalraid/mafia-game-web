@@ -1,9 +1,9 @@
 # 작업 계획서 (TASK_PLAN)
 
-> **문서 버전**: v1.3  
+> **문서 버전**: v1.5  
 > **최초 작성일**: 2026-03-18  
-> **최종 업데이트**: 2026-03-18  
-> **기준**: GitHub 실제 코드 직접 리뷰 결과 반영
+> **최종 업데이트**: 2026-03-19  
+> **기준 커밋**: `978c755` (test 파일 위치 이동)
 
 ---
 
@@ -11,13 +11,13 @@
 
 ```
 Phase 0: 환경 구성 & 기반 작업        ✅ 완료
-Phase 1: 게임 엔진 코어               🔄 부분 구현 (vote 완성, roles 스켈레톤)
-Phase 2: AI Agent 기초                🔄 스켈레톤 (LLM 미연동)
-Phase 3: WebSocket + 채팅 UI          🔄 기본 동작 (chat echo만)
-Phase 4: 슈퍼바이저 + A2A 연동        🔄 스켈레톤 (전략 로직 없음)
-Phase 5: RAG + MCP 통합               ⬜ 미시작 (빈 파일만)
-Phase 6: 풀 게임 통합 테스트          ⬜ 미시작
-Phase 7: UI 다듬기 + 배포             🔄 Docker 완료 / UI 미확인
+Phase 1: 게임 엔진 코어               ✅ 완료 (vote, ability, engine, runner, snapshot)
+Phase 2: AI Agent 기초                ✅ 완료 (LLM 연동, Structured Output, Fallback)
+Phase 3: WebSocket + 채팅 UI          ✅ 완료 (REST API 방식 혼용)
+Phase 4: 슈퍼바이저 + A2A 연동        🔄 부분 완료 (LangGraph 도입, 전략 로직 미완)
+Phase 5: RAG + MCP 통합               🔄 부분 완료 (ChromaDB 구현, 지식베이스 최소 수준)
+Phase 6: 풀 게임 통합 테스트          🔄 테스트 파일 작성 (실행 여부 미확인)
+Phase 7: UI 다듬기 + 배포             🔄 CSS·컴포넌트 구현 완료, 에러 처리 미완
 ```
 
 ---
@@ -28,173 +28,197 @@ Phase 7: UI 다듬기 + 배포             🔄 Docker 완료 / UI 미확인
 
 | # | 작업 | 상태 | 비고 |
 |---|------|------|------|
-| 0-1 | 프로젝트 구조 생성 | ✅ 완료 | 전체 디렉토리 구조 생성 |
-| 0-2 | 의존성 정의 | ✅ 완료 | `requirements.txt` — redis, langchain, chromadb 등 포함 |
-| 0-3 | Git 저장소 초기화 | ✅ 완료 | origin/master 연결됨 |
-| 0-4 | 환경변수 설계 | ✅ 완료 | `.env.example` 존재 |
-| 0-5 | Docker 구성 | ✅ 완료 | `Dockerfile`, `docker-compose.yml` 존재 |
+| 0-1 | 프로젝트 구조 생성 | ✅ 완료 | |
+| 0-2 | 의존성 정의 | ✅ 완료 | `requirements.txt` 지속 업데이트 중 |
+| 0-3 | Git 저장소 초기화 | ✅ 완료 | |
+| 0-4 | 환경변수 설계 | ✅ 완료 | `.env.example` 업데이트됨 |
+| 0-5 | Docker 구성 | ✅ 완료 | `Dockerfile`, `docker-compose.yml` |
 
 ---
 
-### Phase 1: 게임 엔진 코어 🔄 부분 구현
+### Phase 1: 게임 엔진 코어 ✅ 완료
 
 | # | 작업 | 상태 | 비고 |
 |---|------|------|------|
-| 1-1 | 데이터 모델 정의 | ✅ 완료 | `models/game.py` — Role/Phase/Player/GameState/directives/reports 완성 |
-| 1-2 | Phase Manager | 🔄 확인 필요 | `game/phase.py` 존재, 내용 미확인 |
-| 1-3 | 타이머 시스템 | 🔄 확인 필요 | `game/timer.py` 존재, 내용 미확인 |
-| 1-4 | 직업 배분 로직 | 🔄 확인 필요 | `game/roles.py` 내 배분 로직 여부 미확인 |
-| 1-5 | 투표 시스템 | ✅ 완료 | `game/vote.py` — tally_votes 구현 (동률 처리 포함) |
-| 1-6 | 직업 능력 처리 | 🔄 스켈레톤 | `game/roles.py` — 함수 시그니처만, 실제 로직 없음 |
-| 1-7 | 승리 조건 판정 | 🔄 확인 필요 | `game/win_condition.py` 존재, 내용 미확인 |
-| 1-8 | 게임 엔진 코어 | 🔄 기본 구현 | `game/engine.py` — Phase 전환 + 승리 조건 체크 연결 |
-| 1-9 | 게임 로그 | ⬜ 미구현 | `GameEvent` 모델은 있으나 실제 로깅 없음 |
+| 1-1 | 데이터 모델 정의 | ✅ 완료 | `models/game.py` 완성 |
+| 1-2 | Phase Manager | ✅ 완료 | `game/phase.py` 구현 |
+| 1-3 | 타이머 시스템 | ✅ 완료 | `GameRunner.run()` asyncio 루프로 통합 |
+| 1-4 | 직업 배분 로직 | ✅ 완료 | `game/registry.py` + `engine` 연동 |
+| 1-5 | 투표 시스템 | ✅ 완료 | `vote.py` tally + `engine.submit_vote()` |
+| 1-6 | 직업 능력 처리 | ✅ 완료 | `engine.submit_ability()` 구현 |
+| 1-7 | 승리 조건 판정 | ✅ 완료 | `win_condition.py` 구현 |
+| 1-8 | 게임 엔진 코어 | ✅ 완료 | `engine.py` Phase 전환 + 능력 결과 처리 |
+| 1-9 | GameRegistry | ✅ 완료 | `registry.py` In-Memory 세션 관리 |
+| 1-10 | GameRunner | ✅ 완료 | `runner.py` — 게임 루프 + WS 브로드캐스트 조율 |
+| 1-11 | GameSnapshot | ✅ 완료 | `snapshot.py` — 게임 상태 payload 빌드 |
+| 1-12 | 게임 로그 | 🔄 부분 | `player_death` 이벤트만 로깅, 전체 로그 미완 |
 
 ---
 
-### Phase 2: AI Agent 기초 🔄 스켈레톤 (LLM 미연동)
+### Phase 2: AI Agent 기초 ✅ 완료
 
 | # | 작업 | 상태 | 비고 |
 |---|------|------|------|
-| 2-1 | 단일 Agent LangGraph 노드 | 🔄 스켈레톤 | `player_agent.py` — `run()` 항상 None 반환, LLM 미연동 |
-| 2-2 | Agent 페르소나 시스템 | 🔄 확인 필요 | `persona.py` 존재, 내용 미확인 |
-| 2-3 | 발언 생성 프롬프트 | ⬜ 미구현 | LLM 연동 전 구현 불가 |
-| 2-4 | 투표 결정 로직 | ⬜ 미구현 | LLM 연동 전 구현 불가 |
-| 2-5 | 밤 능력 결정 로직 | ⬜ 미구현 | LLM 연동 전 구현 불가 |
-| 2-6 | Agent Pool 관리 | 🔄 확인 필요 | `pool.py` 존재, 내용 미확인 |
-| 2-7 | LangGraph Main Graph | 🔄 스켈레톤 | `graph.py` — LangGraph 미사용, 직접 async 호출 |
-| 2-8 | 발언 타이밍 제어 | ⬜ 미구현 | 랜덤 딜레이 + 성격 가중치 |
-| 2-9 | Redis Checkpointer 연동 | ⬜ 미구현 | 멀티턴 메모리 필수 |
-
-> ⚠️ **핵심 미구현**: `player_agent.py`의 `run()` 메서드가 항상 `None`을 반환합니다.
-> LangChain + Claude API 실제 연동이 Phase 2의 최우선 작업입니다.
+| 2-1 | LangChain + Claude API 연동 | ✅ 완료 | `ChatAnthropic` + `with_structured_output` |
+| 2-2 | Structured Output 스키마 | ✅ 완료 | `AgentDecision` Pydantic 모델 |
+| 2-3 | Phase별 행동 분기 | ✅ 완료 | DAY_CHAT / DAY_VOTE / NIGHT_ABILITY |
+| 2-4 | Fallback 처리 | ✅ 완료 | API 키 없음 or 에러 시 랜덤 폴백 |
+| 2-5 | Agent 페르소나 시스템 | 🔄 확인 필요 | `persona.py` 내용 미확인 |
+| 2-6 | Agent Pool 관리 | 🔄 확인 필요 | `pool.py` 내용 미확인 |
+| 2-7 | 발언 타이밍 제어 | ⬜ 미구현 | 랜덤 딜레이 없음 (순차 실행) |
+| 2-8 | Redis Checkpointer | ⬜ 미구현 | 멀티턴 메모리 없음 |
 
 ---
 
-### Phase 3: WebSocket + 채팅 UI 🔄 기본 동작
+### Phase 3: WebSocket + 채팅 UI ✅ 완료 (REST 혼용)
 
 | # | 작업 | 상태 | 비고 |
 |---|------|------|------|
-| 3-1 | FastAPI WebSocket 엔드포인트 | ✅ 완료 | `main.py` — `/ws/{game_id}` 구현 |
-| 3-2 | WebSocket 이벤트 처리 | 🔄 부분 구현 | `manager.py` — chat_message echo만, vote/ability 미처리 |
-| 3-3 | 브로드캐스트 시스템 | ✅ 완료 | `manager.py` — broadcast 구현 |
-| 3-4 | FastAPI 진입점 | ✅ 완료 | `main.py` — health check + ws 엔드포인트 |
-| 3-5 | Streamlit 메인 레이아웃 | 🔄 기본 구현 | `frontend/app.py` — WebSocket 연결 + 페이지 라우팅 |
-| 3-6 | 채팅 영역 구현 | 🔄 확인 필요 | `components/chat_area.py` 내용 미확인 |
-| 3-7 | 상태창 구현 | 🔄 확인 필요 | `components/status_panel.py` 내용 미확인 |
-| 3-8 | 플레이어 카드 | 🔄 확인 필요 | `components/player_card.py` 내용 미확인 |
-| 3-9 | 사망 오버레이 CSS | 🔄 확인 필요 | `assets/style.css` 내용 미확인 |
-| 3-10 | 로비 화면 | 🔄 확인 필요 | `pages/lobby.py` 내용 미확인 |
-| 3-11 | 게임 화면 | 🔄 확인 필요 | `pages/game.py` 내용 미확인 |
-| 3-12 | 게임 종료 화면 | 🔄 확인 필요 | `pages/result.py` 내용 미확인 |
-| 3-13 | vote/ability WebSocket 핸들러 | ⬜ 미구현 | `manager.py`에 chat_message만 처리 중 |
+| 3-1 | FastAPI WebSocket 엔드포인트 | ✅ 완료 | |
+| 3-2 | REST API 엔드포인트 | ✅ 완료 | `/game/{id}/chat`, `/vote`, `/ability` 추가 |
+| 3-3 | chat_message 처리 | ✅ 완료 | |
+| 3-4 | vote 처리 | ✅ 완료 | REST POST 방식으로 변경 |
+| 3-5 | use_ability 처리 | ✅ 완료 | REST POST 방식, protect→heal 매핑 포함 |
+| 3-6 | GameRunner 자동 시작 | ✅ 완료 | WebSocket 연결 시 asyncio.Task 자동 생성 |
+| 3-7 | Streamlit 메인 레이아웃 | ✅ 완료 | `frontend/app.py` |
+| 3-8 | 채팅 영역 구현 | 🔄 확인 필요 | `chat_area.py` 업데이트됨 |
+| 3-9 | 상태창 구현 | ✅ 완료 | `status_panel.py` — Phase별 버튼 + 타이머 JS |
+| 3-10 | 플레이어 카드 | ✅ 완료 | `player_card.py` — 투표수, 사망 오버레이 등 |
+| 3-11 | 로비/게임/결과 화면 | 🔄 확인 필요 | `pages/*.py` 부분 업데이트됨 |
 
 ---
 
-### Phase 4: 슈퍼바이저 + A2A 연동 🔄 스켈레톤
+### Phase 4: 슈퍼바이저 + A2A 연동 🔄 부분 완료
 
 | # | 작업 | 상태 | 비고 |
 |---|------|------|------|
-| 4-1 | 시민 슈퍼바이저 | 🔄 확인 필요 | `supervisors/citizen.py` 내용 미확인 |
-| 4-2 | 마피아 슈퍼바이저 | 🔄 스켈레톤 | `supervisors/mafia.py` — 첫번째 시민만 타겟, 전략 없음 |
-| 4-3 | 중립 슈퍼바이저 | 🔄 확인 필요 | `supervisors/neutral.py` 내용 미확인 |
-| 4-4 | A2A Directive 시스템 | 🔄 모델만 | `models/directive.py` — Directive/Report 모델은 있음 |
-| 4-5 | Agent 보고 시스템 | ⬜ 미구현 | 모델은 있으나 실제 보고 흐름 없음 |
-| 4-6 | LangGraph 슈퍼바이저 통합 | ⬜ 미구현 | graph.py가 LangGraph 미사용 |
-| 4-7 | 슈퍼바이저 재진단 루프 | ⬜ 미구현 | 평가 반영 필수 항목 |
+| 4-1 | LangGraph StateGraph 도입 | ✅ 완료 | `graph.py` — StateGraph + Node + Edge 사용 |
+| 4-2 | 슈퍼바이저 → Agent 지시 흐름 | ✅ 완료 | `_issue_directives_for_phase()` → `_directive_hint_for_agent()` |
+| 4-3 | 시민 슈퍼바이저 | 🔄 스켈레톤 | 첫 번째 AI를 의심 대상으로 고정, trust_score 미사용 |
+| 4-4 | 마피아 슈퍼바이저 | 🔄 스켈레톤 | 기본 은폐 전략만, 우선순위 로직 미구현 |
+| 4-5 | 중립 슈퍼바이저 | 🔄 스켈레톤 | `neutral.py` 내용 미확인 |
+| 4-6 | A2A Directive 시스템 | ✅ 완료 | `directives[]` + `reports[]` GameState 연동 |
+| 4-7 | Agent 보고 시스템 | 🔄 기본 | `report_to_supervisor()` MCP Tool 구현 |
+| 4-8 | 슈퍼바이저 재진단 루프 | ⬜ 미구현 | Phase 종료 후 상황 재진단 없음 |
+| 4-9 | Redis Checkpointer 연동 | ⬜ 미구현 | |
 
 ---
 
-### Phase 5: RAG + MCP 통합 ⬜ 미시작
-
-| # | 작업 | 상태 | 담당 |
-|---|------|------|------|
-| 5-1 | RAG 지식베이스 문서 작성 | ⬜ 미시작 | Claude |
-| 5-2 | ChromaDB 셋업 | ⬜ 미시작 | Cursor (rag/store.py 빈 파일) |
-| 5-3 | RAG 검색 파이프라인 | ⬜ 미시작 | Cursor (rag/retriever.py 빈 파일) |
-| 5-4 | MCP Tool 서버 구현 | ⬜ 미시작 | Cursor (mcp/tools.py, server.py 빈 파일) |
-| 5-5 | Agent에 MCP 연동 | ⬜ 미시작 | Cursor |
-| 5-6 | 슈퍼바이저 MCP 연동 | ⬜ 미시작 | Cursor |
-
----
-
-### Phase 6: 풀 게임 통합 테스트 ⬜ 미시작
+### Phase 5: RAG + MCP 통합 🔄 부분 완료
 
 | # | 작업 | 상태 | 비고 |
 |---|------|------|------|
-| 6-1 | 단위 테스트 | ⬜ 미시작 | `tests/*.py` 파일만 존재 |
-| 6-2 | Agent 발언 품질 테스트 | ⬜ 미시작 | Phase 2 완료 후 가능 |
-| 6-3 | 전체 게임 시뮬레이션 | ⬜ 미시작 | |
-| 6-4 | 사람 참여 통합 테스트 | ⬜ 미시작 | |
+| 5-1 | ChromaDB RAGStore 구현 | ✅ 완료 | `rag/store.py` — PersistentClient + 임베딩 |
+| 5-2 | 디스크 기반 문서 인덱싱 | ✅ 완료 | `index_from_disk()` — `.md` 자동 로드 |
+| 5-3 | RAG 지식베이스 문서 | 🔄 최소 수준 | 6개 파일만 (전략 2, 발언패턴 2, 상황 1, 룰 1) |
+| 5-4 | MCP Tool 구현 | ✅ 완료 | `MCPGameTools` — 전체 Tool 함수 구현 |
+| 5-5 | MCP → Agent 연동 | 🔄 부분 | graph.py에서 MCPGameTools 직접 호출 (bind_tools 미사용) |
+| 5-6 | RAG → Agent 프롬프트 주입 | ⬜ 미구현 | store.py 구현됐으나 player_agent에서 RAG 쿼리 없음 |
+| 5-7 | 슈퍼바이저 MCP 연동 | ⬜ 미구현 | |
 
 ---
 
-### Phase 7: UI 다듬기 + 배포 🔄 부분
+### Phase 6: 풀 게임 통합 테스트 🔄 파일 작성
 
 | # | 작업 | 상태 | 비고 |
 |---|------|------|------|
-| 7-1 | Docker 구성 | ✅ 완료 | Dockerfile, docker-compose.yml |
-| 7-2 | CSS 스타일링 | 🔄 확인 필요 | style.css 존재, 내용 미확인 |
-| 7-3 | 타이머 애니메이션 | ⬜ 미구현 | |
-| 7-4 | 에러 처리 | ⬜ 미구현 | |
-| 7-5 | 루트 README.md | ⬜ 미구현 | 실행 방법 문서 없음 |
+| 6-1 | 게임 엔진 단위 테스트 | 🔄 작성 | `backend/tests/test_game_engine.py` (174줄) |
+| 6-2 | Agent 테스트 | 🔄 작성 | `backend/tests/test_agents.py` (41줄) |
+| 6-3 | WebSocket 테스트 | 🔄 작성 | `backend/tests/test_websocket.py` (104줄) |
+| 6-4 | 프론트 E2E 테스트 | 🔄 작성 | `frontend/tests/e2e/test_lobby.py` (42줄) |
+| 6-5 | 유틸 단위 테스트 | 🔄 작성 | `frontend/tests/pytest/test_utils.py` (73줄) |
+| 6-6 | 전체 게임 시뮬레이션 | ⬜ 미작성 | AI vs AI 자동 실행 시나리오 |
+
+---
+
+### Phase 7: UI 다듬기 + 배포 🔄 부분 완료
+
+| # | 작업 | 상태 | 비고 |
+|---|------|------|------|
+| 7-1 | Docker 구성 | ✅ 완료 | |
+| 7-2 | CSS 스타일링 | 🔄 구현 | `style.css` 업데이트 (낮/밤 테마 포함) |
+| 7-3 | 타이머 JS 애니메이션 | ✅ 완료 | `status_panel.py` 내 JS interval 구현 |
+| 7-4 | 에러 처리 유틸 | 🔄 부분 | `frontend/utils.py` `handle_request_error()` 추가 |
+| 7-5 | 루트 README.md | ✅ 완료 | 추가됨 |
 
 ---
 
 ## 3. 현재 이슈 목록 🚨
 
-| # | 이슈 | 심각도 | 조치 |
-|---|------|--------|------|
-| I-1 | `player_agent.py`의 `run()` 항상 None 반환 | 🔴 높음 | LLM 연동 구현 필요 (Phase 2 핵심) |
-| I-2 | `graph.py`가 LangGraph 미사용 | 🔴 높음 | 실제 LangGraph 노드/엣지로 교체 필요 |
-| I-3 | `websocket/manager.py` vote/ability 이벤트 미처리 | 🔴 높음 | Phase 3 완성 위해 필수 |
-| I-4 | `game/roles.py` 능력 함수 로직 없음 | 🟡 중간 | Phase 1 완성 위해 필요 |
-| I-5 | `supervisors/mafia.py` 단순 첫번째 시민 타겟팅 | 🟡 중간 | 전략 로직 추가 필요 |
-| I-6 | `streamlit-websocket-client==0.0.1` 패키지 검증 필요 | 🟡 중간 | 실제 PyPI 존재 여부 확인 필요 |
-| I-7 | Redis Checkpointer 미연동 | 🟡 중간 | Phase 2 구현 시 병행 필요 |
-| I-8 | 루트 README.md 없음 | 🟢 낮음 | Phase 7에서 작성 |
+### 🔴 기획 불일치 (설계 vs 구현)
+
+| # | 이슈 | 설명 | 조치 필요 |
+|---|------|------|----------|
+| I-1 | **투표/능력 WebSocket → REST 변경** | UI_DESIGN·TECH_ARCHITECTURE는 WebSocket 방식으로 설계했으나 프론트가 REST POST로 구현 | TECH_ARCHITECTURE 업데이트 or 프론트 방식 통일 결정 필요 |
+| I-2 | **RAG → Agent 프롬프트 미연결** | `rag/store.py` 구현됐으나 `player_agent.py`에서 RAG 쿼리 없음 | Cursor: player_agent의 `_decide_with_llm`에 RAG 컨텍스트 주입 |
+| I-3 | **MCP bind_tools 미적용** | EVALUATION_REFLECTION 기준 `bind_tools+ToolNode` 패턴 필수인데 MCPGameTools 직접 호출 중 | Cursor: LLM.bind_tools() 패턴으로 전환 |
+| I-4 | **슈퍼바이저 전략 로직 미구현** | 첫 번째 AI를 의심 대상으로 고정, trust_score 미사용 | Cursor: Phase 4 전략 로직 고도화 필요 |
+| I-5 | **RAG 지식베이스 최소 수준** | 6개 파일 (평가 기준 미달) | Claude: 추가 지식 문서 작성 필요 (Phase 5-1) |
+
+### 🟡 중간 이슈
+
+| # | 이슈 | 조치 |
+|---|------|------|
+| I-6 | Redis Checkpointer 미연동 | 멀티턴 메모리 없음, Phase 4 완성 전 필요 |
+| I-7 | 발언 타이밍 랜덤 딜레이 없음 | 자연스러운 AI 발화 위해 필요 |
+| I-8 | 마피아 밤 채팅 채널 분리 미구현 | TECH_ARCHITECTURE: `mafia_secret` 채널 없음 |
+| I-9 | `persona.py`, `pool.py` 내용 미확인 | 페르소나 실제 활용 여부 불명 |
 
 ---
 
-## 4. 실제 코드 리뷰 결과 요약 (2026-03-18)
+## 4. 최신 커밋 변경 요약 (2026-03-19)
 
 ```
-✅ 완성된 것:
-  - models/game.py (GameState, Player, Role, Phase, directives, reports)
-  - game/vote.py (tally_votes, 동률 처리)
-  - game/engine.py (Phase 전환 기본 동작)
-  - websocket/manager.py (connect/disconnect/broadcast)
-  - backend/main.py (FastAPI + WebSocket 엔드포인트)
-  - frontend/app.py (WebSocket 연결 + 페이지 라우팅)
-  - requirements.txt (redis, langchain, chromadb 등 포함)
+커밋 978c755 — test 파일 위치 이동
+  tests/*.py → backend/tests/*.py 이동 (파일 삭제됨, backend/tests에 재생성)
 
-🔄 스켈레톤 (구조만, 실제 동작 없음):
-  - player_agent.py (run() → 항상 None)
-  - agents/graph.py (LangGraph 아님, 직접 async 호출)
-  - game/roles.py (능력 함수 시그니처만)
-  - supervisors/mafia.py (첫번째 시민 타겟팅만)
+커밋 6a6086d — 프론트엔드 초안
+  ✅ status_panel.py: Phase별 버튼 + 타이머 JS + 플레이어 목록 완성
+  ✅ player_card.py: 투표 수, 사망 오버레이, 클릭 선택 구현
+  ✅ chat_area.py: 채팅 표시 업데이트
+  ✅ frontend/utils.py: handle_request_error 유틸 추가
+  ✅ frontend/tests/: E2E + 단위 테스트 추가
+  ⚠️ 투표/능력을 WebSocket 아닌 REST POST로 구현 (설계 변경)
 
-⬜ 빈 파일:
-  - rag/store.py, rag/retriever.py
-  - mcp/tools.py, mcp/server.py
-  - tests/*.py
+커밋 9e735ac — 백엔드 초안 작성
+  ✅ graph.py: LangGraph StateGraph 실제 도입 (Node/Edge 구조)
+  ✅ runner.py: GameRunner — asyncio 기반 게임 루프 완성
+  ✅ snapshot.py: 게임 상태 payload 빌드 유틸
+  ✅ main.py: REST API (/chat, /vote, /ability) + GameRunner 자동 시작
+  ✅ rag/store.py: ChromaDB + sentence-transformers RAG 구현
+  ✅ rag/knowledge/: 6개 지식 문서 추가 (최소 수준)
+  ✅ mcp/tools.py: MCPGameTools 전체 Tool 구현
+  ✅ supervisors/: 3개 슈퍼바이저 업데이트 (스켈레톤 수준)
+  ✅ backend/tests/: 테스트 파일 이동 및 추가
 ```
 
 ---
 
-## 5. 다음 우선 작업 (Cursor 지시)
+## 5. 다음 우선 작업
 
+### Claude 담당 (docs만)
 ```
-우선순위 1: Phase 2 — LLM 실제 연동
-  → player_agent.py에 LangChain + Claude API 연동
-  → bind_tools + ToolNode 패턴 (EVALUATION_REFLECTION.md 참조)
-  → Redis Checkpointer 연동 (RAG_AND_STORAGE_DESIGN.md 참조)
+1. RAG 지식 문서 추가 작성 (Phase 5-1)
+   → rag/knowledge/ 에 전략·발언패턴·상황 문서 최소 20개+ 필요
+2. TECH_ARCHITECTURE 업데이트
+   → 투표/능력 REST 방식 반영 (WebSocket → REST 설계 변경 기록)
+3. 기획 불일치 이슈 (I-1~I-5) Cursor에게 작업 지시
+```
 
-우선순위 2: Phase 1 완성
-  → game/roles.py 능력 로직 구현 (detective, doctor, mafia, killer)
+### Cursor 담당 (백엔드)
+```
+1. player_agent.py에 RAG 컨텍스트 주입 (I-2)
+2. 슈퍼바이저 전략 로직 고도화 — trust_score 기반 (I-4)
+3. 마피아 밤 채팅 채널 mafia_secret 분리 (I-8)
+4. 발언 타이밍 랜덤 딜레이 추가 (I-7)
+5. Redis Checkpointer 연동 (I-6)
+```
 
-우선순위 3: Phase 3 완성
-  → websocket/manager.py에 vote, use_ability 이벤트 핸들러 추가
+### Gemini 담당 (프론트)
+```
+1. REST POST voter 필드 sender → player_name 통일 확인
+2. 마피아 밤 채팅 채널 분리 UI 반영
+3. 로비 화면 완성 (game_id, player_name, player_count 입력)
 ```
 
 ---
@@ -214,6 +238,6 @@ refactor: 리팩토링
 
 ```
 master  ← 현재 사용 중
-dev     ← Phase 3 이후 분리 권장
+dev     ← Phase 5 완성 후 분리 권장
 feat/*  ← 기능별 브랜치
 ```
