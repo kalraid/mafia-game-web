@@ -25,7 +25,7 @@ services:
 
   # ----------------------------------------------------------
   # Backend — FastAPI + LangGraph + LangChain
-  # Dockerfile: backend/Dockerfile (Cursor 담당)
+  # Dockerfile: Dockerfile (루트, Cursor 담당)
   # ----------------------------------------------------------
   backend:
     build:
@@ -49,20 +49,20 @@ services:
   # ----------------------------------------------------------
   # Frontend — Streamlit
   # Dockerfile: frontend/Dockerfile (Gemini 담당)
-  # ※ 아직 frontend/Dockerfile 미작성 → 주석 유지
   # ----------------------------------------------------------
-  # frontend:
-  #   build:
-  #     context: ./frontend
-  #     dockerfile: Dockerfile
-  #   container_name: mafia-frontend
-  #   ports:
-  #     - "8501:8501"
-  #   environment:
-  #     - BACKEND_URL=http://backend:8000
-  #   depends_on:
-  #     - backend
-  #   restart: unless-stopped
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: mafia-frontend
+    ports:
+      - "8501:8501"
+    environment:
+      - BACKEND_URL=http://backend:8000
+      - WS_URL=ws://backend:8000
+    depends_on:
+      - backend
+    restart: unless-stopped
 
 volumes:
   chroma_data:
