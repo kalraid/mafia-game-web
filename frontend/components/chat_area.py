@@ -3,6 +3,48 @@ import requests
 from datetime import datetime
 from frontend.utils import handle_request_error
 
+def _draw_message(msg, my_name, dead_players, highlight_player, phase):
+    sender = msg.get("sender", "System")
+    content = msg.get("content", "")
+    channel = msg.get("channel", "global")
+    timestamp = msg.get("timestamp", datetime.now().strftime("%H:%M"))
+
+    class_list = ["chat-message"]
+    sender_display = sender
+    is_dead_sender = sender in dead_players
+
+    if is_dead_sender:
+        class_list.append("dead-message")
+    
+    if phase == "day_chat" and highlight_player and sender == highlight_player:
+        class_list.append("highlight-message")
+
+    if sender == "System":
+        class_list.append("system-message")
+        st.markdown(f'<div class="{" ".join(class_list)}">{content}</div>', unsafe_allow_html=True)
+        return
+    elif sender == my_name:
+        class_list.append("my-message")
+        sender_display = f"🟢 {my_name}"
+    elif channel == "mafia_secret":
+        class_list.append("mafia-message")
+        sender_display = f"🔴 {sender} (마피아)"
+    else:
+        class_list.append("other-message")
+        sender_display = f"👤 {sender}"
+
+    st.markdown(f"""
+        <div class="{" ".join(class_list)}">
+            <div class="message-header">
+                <span>{sender_display}</span>
+                <span>{timestamp}</span>
+            </div>
+            <div class="message-content">
+                {content}
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+
 def draw_chat_area():
     st.header("Chat")
 
@@ -11,84 +53,75 @@ def draw_chat_area():
     players = game_state.get("players", [])
     my_name = st.session_state.get("player_name", "Player")
     game_id = st.session_state.get("game_id", "test_game")
+    my_role = st.session_state.get("my_role", "citizen")
     
     phase = game_state.get("phase", "day_chat")
     highlight_player = st.session_state.get("selection")
 
-    # Create a set of dead player names for quick lookup
     dead_players = {p["name"] for p in players if not p.get("is_alive", True)}
+    
+    is_night = "night" in phase
+    # As per WORK_ORDER, my_role can be 'killer'
+    is_mafia = my_role in ["mafia", "killer"]
 
-    # Chat History
-    st.markdown('<div class="chat-container">', unsafe_allow_html=True)
-    for msg in chat_history:
-        sender = msg.get("sender", "System")
-        content = msg.get("content", "")
-        channel = msg.get("channel", "global")
-        timestamp = msg.get("timestamp", datetime.now().strftime("%H:%M"))
-
-        class_list = ["chat-message"]
-        sender_display = sender
-        is_dead_sender = sender in dead_players
-
-        if is_dead_sender:
-            class_list.append("dead-message")
-        
-        # Add highlight class if a player is selected during day_chat
-        if phase == "day_chat" and highlight_player and sender == highlight_player:
-            class_list.append("highlight-message")
-
-        if sender == "System":
-            class_list.append("system-message")
-            st.markdown(f'<div class="{" ".join(class_list)}">{content}</div>', unsafe_allow_html=True)
-            continue # Skip to next message
-        elif sender == my_name:
-            class_list.append("my-message")
-            sender_display = f"🟢 {my_name}"
-        elif channel == "mafia_secret":
-            class_list.append("mafia-message")
-            sender_display = f"🔴 {sender} (마피아)"
-        else:
-            class_list.append("other-message")
-            sender_display = f"👤 {sender}"
-
-        st.markdown(f"""
-            <div class="{" ".join(class_list)}">
-                <div class="message-header">
-                    <span>{sender_display}</span>
-                    <span>{timestamp}</span>
-                </div>
-                <div class="message-content">
-                    {content}
-                </div>
-            </div>
+    def render_chat_list(messages):
+        st.markdown('<div class="chat-container">', unsafe_allow_html=True)
+        for msg in messages:
+            _draw_message(msg, my_name, dead_players, highlight_player, phase)
+        st.markdown('</div>', unsafe_allow_html=True)
+        # JS for auto-scrolling
+        st.markdown("""
+            <script>
+                const chatContainer = window.parent.document.querySelector('.chat-container:last-child');
+                if (chatContainer) {
+                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                }
+            </script>
         """, unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
 
-    # JavaScript for auto-scrolling
-    st.markdown("""
-        <script>
-            const chatContainer = window.parent.document.querySelector('.chat-container');
-            if (chatContainer) {
-                chatContainer.scrollTop = chatContainer.scrollHeight;
-            }
-        </script>
-    """, unsafe_allow_html=True)
+    if is_night and is_mafia:
+        tab_global, tab_mafia = st.tabs(["전체 채팅", "🔴 마피아 비밀 채널"])
+        
+        with tab_global:
+            global_chats = [m for m in chat_history if m.get("channel") in ["global", "system"]]
+            render_chat_list(global_chats)
+            
+        with tab_mafia:
+            mafia_chats = [m for m in chat_history if m.get("channel") == "mafia_secret"]
+            render_chat_list(mafia_chats)
 
+            # Mafia chat input
+            mafia_chat_input = st.text_input("마피아 채널 메시지...", key="mafia_chat_input")
+            if st.button("마피아 전용 전송", key="mafia_chat_send"):
+                if mafia_chat_input:
+                    try:
+                        response = requests.post(
+                            f"http://localhost:8000/game/{game_id}/chat",
+                            json={"sender": my_name, "content": mafia_chat_input, "channel": "mafia_secret"}
+                        )
+                        response.raise_for_status()
+                        st.session_state.mafia_chat_input = ""
+                    except requests.exceptions.RequestException as e:
+                        handle_request_error(e, "마피아 메시지 전송 실패")
+    else:
+        global_chats = [m for m in chat_history if m.get("channel") in ["global", "system"]]
+        render_chat_list(global_chats)
 
-    # Message Input
-    chat_input = st.text_input("메시지를 입력하세요...", key="chat_input")
-    if st.button("전송", key="chat_send"):
-        if chat_input:
-            try:
-                # Send message to backend via HTTP POST
-                response = requests.post(
-                    f"http://localhost:8000/game/{game_id}/chat",
-                    json={"sender": my_name, "content": chat_input, "channel": "global"}
-                )
-                response.raise_for_status()
-                st.session_state.chat_input = ""
-            except requests.exceptions.RequestException as e:
-                handle_request_error(e, "메시지 전송 실패")
+        # Message Input for global chat
+        # Disable chat input during non-chat phases
+        is_chat_phase = phase in ["day_chat"]
+        chat_input = st.text_input("메시지를 입력하세요...", key="chat_input", disabled=not is_chat_phase)
+        if st.button("전송", key="chat_send", disabled=not is_chat_phase):
+            if chat_input:
+                try:
+                    response = requests.post(
+                        f"http://localhost:8000/game/{game_id}/chat",
+                        json={"sender": my_name, "content": chat_input, "channel": "global"}
+                    )
+                    response.raise_for_status()
+                    st.session_state.chat_input = ""
+                except requests.exceptions.RequestException as e:
+                    handle_request_error(e, "메시지 전송 실패")
 
 if __name__ == "__main__":
     st.session_state.game_state = {

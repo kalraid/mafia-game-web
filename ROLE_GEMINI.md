@@ -52,6 +52,8 @@ Streamlit 화면, WebSocket 클라이언트, 사용자 인터랙션을 구현합
 | `TECH_ARCHITECTURE.md` | WebSocket 이벤트 계약 (서버↔클라이언트) |
 | `GAME_RULES.md` | Phase 흐름 이해, 버튼/상태 조건 파악 |
 | `TASK_PLAN.md` | 작업 순서 및 우선순위 |
+| `TECH_ARCHITECTURE.md` | BACKEND-FRONTEND 간 통신구조 및 API |
+| `WORK_ORDER_GEMINI.md` | 기획자의 작업지시서 |
 
 ---
 

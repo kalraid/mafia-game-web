@@ -46,6 +46,23 @@ def handle_message(message):
                         p["role"] = dead_player_role # Reveal role on death
                         break
             st.rerun()
+        elif event == "vote_result":
+            # Payload is expected to be a dict mapping player names to vote counts
+            # e.g., {"player1": 2, "player2": 1, "player3": 0}
+            vote_counts = payload.get("votes", {})
+            if "players" in st.session_state.game_state:
+                for p in st.session_state.game_state["players"]:
+                    p["votes"] = vote_counts.get(p["name"], 0)
+            st.rerun()
+        elif event == "ability_result":
+            # Payload is expected to be {"success": bool, "message": str}
+            message = payload.get("message", "능력 사용 결과가 도착했습니다.")
+            success = payload.get("success", True)
+            if success:
+                st.toast(f"✅ {message}", icon="✅")
+            else:
+                st.toast(f"❌ {message}", icon="❌")
+            # No rerun needed for toast
         elif event == "game_over":
             st.session_state.game_state.update(payload)
             st.session_state.page = "result"
