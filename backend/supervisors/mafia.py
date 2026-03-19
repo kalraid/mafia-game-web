@@ -38,3 +38,27 @@ class MafiaSupervisor:
                 )
             )
         return directives
+
+    def issue_night_ability_directives(self, state: GameState) -> List[Directive]:
+        """
+        밤 능력 단계용 A2A 지시 스켈레톤.
+        - 마피아는 최종 1명 대상(choose_kill_target)에게 공격(attack) 지시
+        """
+        kill_target = self.choose_kill_target(state=state, reports=[])
+        if not kill_target:
+            return []
+
+        mafia_players = [p for p in state.players if p.is_alive and p.team == Team.MAFIA]
+        directives: List[Directive] = []
+        for mafia in mafia_players:
+            directives.append(
+                Directive(
+                    target_agent=mafia.id,
+                    from_=self.supervisor_id,
+                    type="ability_strategy",
+                    content=f"밤에는 공격(attack)을 사용해. 처치 대상은 {kill_target}로 하라.",
+                    priority="high",
+                    round=state.round,
+                )
+            )
+        return directives

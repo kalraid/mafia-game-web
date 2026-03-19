@@ -33,3 +33,56 @@ class CitizenSupervisor:
                 )
             )
         return directives
+
+    def issue_night_ability_directives(self, state: GameState, reports: List[Report]) -> List[Directive]:
+        """
+        밤 능력(Ability) 단계용 A2A 지시 스켈레톤.
+        """
+        alive_players = [p for p in state.players if p.is_alive]
+        mafia_players = [p for p in alive_players if p.team.value == "mafia"]
+        citizen_players = [p for p in alive_players if p.team.value != "mafia"]
+
+        first_mafia = mafia_players[0].id if mafia_players else (citizen_players[0].id if citizen_players else None)
+
+        directives: List[Directive] = []
+        for p in alive_players:
+            if p.team.value == "mafia":
+                continue
+
+            if p.role.value == "detective":
+                directives.append(
+                    Directive(
+                        target_agent=p.id,
+                        from_=self.supervisor_id,
+                        type="ability_strategy",
+                        content=f"밤에는 조사(investigate)를 사용해. 대상은 {first_mafia}를 확인하라.",
+                        priority="high",
+                        round=state.round,
+                    )
+                )
+            elif p.role.value == "doctor":
+                heal_target = citizen_players[0].id if citizen_players else p.id
+                directives.append(
+                    Directive(
+                        target_agent=p.id,
+                        from_=self.supervisor_id,
+                        type="ability_strategy",
+                        content=f"밤에는 보호(heal)를 사용해. 대상은 {heal_target}로 하라.",
+                        priority="high",
+                        round=state.round,
+                    )
+                )
+            else:
+                # 시민/중립 중 밤 능력이 있는 역할은 후속 단계에서 세부 처리
+                directives.append(
+                    Directive(
+                        target_agent=p.id,
+                        from_=self.supervisor_id,
+                        type="ability_strategy",
+                        content="밤에는 역할에 맞는 능력을 사용하거나 필요 없으면 null로 두고 생존 중심으로 행동하라.",
+                        priority="medium",
+                        round=state.round,
+                    )
+                )
+
+        return directives

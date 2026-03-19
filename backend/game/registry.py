@@ -4,7 +4,7 @@ from typing import Dict
 
 from backend.game.engine import GameEngine
 from backend.game.phase import get_phase_duration
-from backend.models.game import GameState, Phase
+from backend.models.game import GameState, Phase, Player, Role, Team
 
 
 class GameRegistry:
@@ -24,7 +24,53 @@ class GameRegistry:
             phase=Phase.DAY_CHAT,
             round=1,
             timer_seconds=get_phase_duration(Phase.DAY_CHAT),
-            players=[],
+            players=[
+                Player(
+                    id="나",
+                    name="나",
+                    role=Role.CITIZEN,
+                    team=Team.CITIZEN,
+                    is_alive=True,
+                    is_human=True,
+                    trust_score=0.5,
+                ),
+                Player(
+                    id="김민준",
+                    name="김민준",
+                    role=Role.MAFIA,
+                    team=Team.MAFIA,
+                    is_alive=True,
+                    is_human=False,
+                    trust_score=0.5,
+                ),
+                Player(
+                    id="박서연",
+                    name="박서연",
+                    role=Role.DETECTIVE,
+                    team=Team.CITIZEN,
+                    is_alive=True,
+                    is_human=False,
+                    trust_score=0.5,
+                ),
+                Player(
+                    id="최수아",
+                    name="최수아",
+                    role=Role.DOCTOR,
+                    team=Team.CITIZEN,
+                    is_alive=True,
+                    is_human=False,
+                    trust_score=0.5,
+                ),
+                Player(
+                    id="이지호",
+                    name="이지호",
+                    role=Role.CITIZEN,
+                    team=Team.CITIZEN,
+                    is_alive=True,
+                    is_human=False,
+                    trust_score=0.5,
+                ),
+            ],
         )
         engine = GameEngine(state)
         engine.start()

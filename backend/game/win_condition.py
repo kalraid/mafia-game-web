@@ -15,8 +15,18 @@ def check_winner(state: GameState) -> Optional[str]:
         if p.team == Team.CITIZEN or p.role in (Role.JESTER, Role.SPY)
     )
 
-    if any(p.role == Role.JESTER and not p.is_alive for p in state.players):
-        return "jester"
+    # 광대(Jester)는 "투표로 처형당했을 때" 단독 승리.
+    # 밤에 사망하면 패배이므로, 사망 원인(cause)로 구분한다.
+    for p in state.players:
+        if p.role != Role.JESTER or p.is_alive:
+            continue
+        for e in state.events:
+            if e.type != "player_death":
+                continue
+            if e.payload.get("player") != p.id:
+                continue
+            if e.payload.get("cause") == "vote":
+                return "jester"
 
     if mafia_count == 0:
         return "citizen"

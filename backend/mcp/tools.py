@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import List
 
 from backend.game.engine import GameEngine
@@ -40,15 +41,25 @@ class MCPGameTools:
 
     # Action Tools
     def send_chat(self, agent_id: str, content: str, channel: str = "global") -> bool:
-        # Phase 5에서는 GameState에만 기록하고, WebSocket 브로드캐스트 연동은 이후 단계에서 처리
+        state: GameState = self.engine.state
+        state.chat_history.append(
+            ChatMessage(
+                id=f"chat_{len(state.chat_history)+1}",
+                sender=agent_id,
+                content=content,
+                channel=channel,  # expects Literal in models/chat.py
+                timestamp=datetime.utcnow(),
+                is_ai=True,
+            )
+        )
         return True
 
     def submit_vote(self, agent_id: str, target_id: str) -> bool:
-        # GameEngine.votes에 기록하는 로직은 이후 Phase에서 추가
+        self.engine.submit_vote(voter_id=agent_id, target_id=target_id)
         return True
 
     def use_ability(self, agent_id: str, ability: str, target_id: str) -> bool:
-        # roles.py의 ROLE_ABILITIES와 연동하는 실제 처리 로직은 이후 Phase에서 추가
+        self.engine.submit_ability(agent_id=agent_id, ability=ability, target_id=target_id)
         return True
 
     def report_to_supervisor(self, agent_id: str, report: str) -> bool:

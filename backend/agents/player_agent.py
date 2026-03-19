@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
 from backend.agents.persona import AgentPersona
+from backend.rag.retriever import SituationDescription, StrategyRetriever
+from backend.rag.store import RAGStore
 from backend.models.game import GameState, Player
 from backend.models.game import Role, Phase
 
@@ -44,10 +46,33 @@ class AgentOutput:
 
 
 class PlayerAgent:
+    _rag_retriever: StrategyRetriever | None = None
+
     def __init__(self, agent_id: str, persona: AgentPersona, player: Player) -> None:
         self.agent_id = agent_id
         self.persona = persona
         self.player = player
+
+    def _get_rag_retriever(self) -> StrategyRetriever | None:
+        """
+        비용이 큰 RAG 초기화를 매 호출마다 하지 않도록 lazy singleton으로 유지.
+        """
+        if PlayerAgent._rag_retriever is not None:
+            return PlayerAgent._rag_retriever
+
+        try:
+            persist_dir = os.getenv("CHROMA_PERSIST_DIR", "./backend/rag/chroma_db")
+            embedding_model = os.getenv(
+                "EMBEDDING_MODEL",
+                "sentence-transformers/paraphrase-multilingual-mpnet-base-v2",
+            )
+            store = RAGStore(persist_dir=persist_dir, embedding_model=embedding_model)
+            knowledge_dir = os.getenv("RAG_KNOWLEDGE_DIR", "./backend/rag/knowledge")
+            store.index_from_disk(knowledge_root=knowledge_dir)
+            PlayerAgent._rag_retriever = StrategyRetriever(store=store)
+            return PlayerAgent._rag_retriever
+        except Exception:
+            return None
 
     async def run(self, agent_input: AgentInput) -> AgentOutput:
         # Phase 2 핵심: LLM 연동(키가 없으면 안전 폴백)
@@ -79,7 +104,7 @@ class PlayerAgent:
                     reasoning="fallback: missing LLM config or runtime error",
                     confidence=0.0,
                 )
-            if phase == Phase.DAY_VOTE:
+            if phase in (Phase.DAY_VOTE, Phase.FINAL_VOTE):
                 target = random.choice(alive_ids) if alive_ids else None
                 return AgentDecision(
                     vote_target=target,
@@ -87,7 +112,15 @@ class PlayerAgent:
                     confidence=0.0,
                 )
             if phase == Phase.NIGHT_ABILITY:
-                ability = self._allowed_ability_for_role(self.player.role)[0]
+                allowed = self._allowed_ability_for_role(self.player.role)
+                if not allowed:
+                    return AgentDecision(
+                        ability=None,
+                        ability_target=None,
+                        reasoning="fallback: no ability for this role",
+                        confidence=0.0,
+                    )
+                ability = allowed[0]
                 target = random.choice(alive_ids) if alive_ids else None
                 return AgentDecision(
                     ability=ability,
@@ -100,6 +133,14 @@ class PlayerAgent:
                 reasoning="fallback: unsupported phase",
                 confidence=0.0,
             )
+
+        # CI/테스트에서는 LLM 호출을 강제로 끄고(폴백 사용), 실제 게임 진행에서는 켤 수 있게 제어.
+        # - CI가 설정된 경우: 폴백 전용
+        # - MAFIA_USE_LLM=0/false/no: 폴백 전용
+        use_llm_flag = os.getenv("MAFIA_USE_LLM", "1").strip().lower()
+        llm_disabled = os.getenv("CI") is not None or use_llm_flag in {"0", "false", "no"}
+        if llm_disabled:
+            return fallback()
 
         api_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
         if not api_key:
@@ -133,19 +174,45 @@ class PlayerAgent:
         available_players = ", ".join(alive_ids) if alive_ids else "(none)"
         my_role = self.player.role.value
 
+        # RAG 컨텍스트 주입(문서가 없으면 빈 결과 → fallback처럼 동작)
+        rag_context: list[dict] = []
+        try:
+            retriever = self._get_rag_retriever()
+            if retriever is not None:
+                alive_players = [p for p in game_state.players if p.is_alive]
+                mafia_count = sum(1 for p in alive_players if p.team.value == "mafia")
+                citizen_count = sum(1 for p in alive_players if p.team.value != "mafia")
+                situation_text = (
+                    f"game_id={game_state.game_id}, phase={phase.value}, round={game_state.round}. "
+                    f"alive: mafia={mafia_count}, citizen_or_neutral={citizen_count}. "
+                    f"my_role={my_role}. directive_hint={directive_hint[:200]}"
+                )
+                rag_context = retriever.retrieve_strategies(
+                    situation=SituationDescription(text=situation_text),
+                    k=3,
+                )
+        except Exception:
+            rag_context = []
+
         phase_instruction = ""
         if phase == Phase.DAY_CHAT:
             phase_instruction = (
                 "현재 Phase는 낮 채팅이다. speech만 작성하고 vote/ability 필드는 null로 둬라."
             )
-        elif phase == Phase.DAY_VOTE:
+        elif phase in (Phase.DAY_VOTE, Phase.FINAL_VOTE):
             phase_instruction = "현재 Phase는 낮 투표이다. alive한 player_id 중 vote_target을 선택해라."
         elif phase == Phase.NIGHT_ABILITY:
             allowed = self._allowed_ability_for_role(self.player.role)
-            phase_instruction = (
-                f"현재 Phase는 밤 능력 사용이다. ability는 {allowed} 중 하나를 선택하고, "
-                f"ability_target은 alive한 player_id 중 하나를 선택해라."
-            )
+            if not allowed:
+                phase_instruction = (
+                    "현재 Phase는 밤 능력 사용이다. 이 역할은 능력이 없으니 ability와 ability_target은 null로 두고, "
+                    "reasoning에는 '능력 없음'이라고 적어라."
+                )
+            else:
+                phase_instruction = (
+                    f"현재 Phase는 밤 능력 사용이다. ability는 {allowed} 중 하나를 선택하고, "
+                    f"ability_target은 alive한 player_id 중 하나를 선택해라."
+                )
         else:
             phase_instruction = "현재 Phase에 맞는 행동을 선택해라. 해당 필드만 채우고 나머지는 null로 둬라."
 
@@ -166,6 +233,7 @@ class PlayerAgent:
                 "timer_seconds": game_state.timer_seconds,
             },
             "supervisor_directive": directive_hint,
+            "rag_context": rag_context,
             "recent_chat": recent_chat,
             "available_players": available_players,
             "task": phase_instruction,
@@ -193,6 +261,8 @@ class PlayerAgent:
             return ["attack"]
         if role == Role.FORTUNE_TELLER:
             return ["investigate"]
-        if role in (Role.JESTER, Role.SPY, Role.CITIZEN):
-            return ["investigate"]
+        if role == Role.SPY:
+            return ["spy_listen"]
+        if role in (Role.JESTER, Role.CITIZEN):
+            return []
         return ["investigate"]
