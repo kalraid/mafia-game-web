@@ -1,14 +1,22 @@
 import streamlit as st
 import requests
 from datetime import datetime
+from frontend.utils import handle_request_error
 
 def draw_chat_area():
     st.header("Chat")
 
     game_state = st.session_state.get("game_state", {})
     chat_history = game_state.get("chat_history", [])
+    players = game_state.get("players", [])
     my_name = st.session_state.get("player_name", "Player")
     game_id = st.session_state.get("game_id", "test_game")
+    
+    phase = game_state.get("phase", "day_chat")
+    highlight_player = st.session_state.get("selection")
+
+    # Create a set of dead player names for quick lookup
+    dead_players = {p["name"] for p in players if not p.get("is_alive", True)}
 
     # Chat History
     st.markdown('<div class="chat-container">', unsafe_allow_html=True)
@@ -20,6 +28,14 @@ def draw_chat_area():
 
         class_list = ["chat-message"]
         sender_display = sender
+        is_dead_sender = sender in dead_players
+
+        if is_dead_sender:
+            class_list.append("dead-message")
+        
+        # Add highlight class if a player is selected during day_chat
+        if phase == "day_chat" and highlight_player and sender == highlight_player:
+            class_list.append("highlight-message")
 
         if sender == "System":
             class_list.append("system-message")
@@ -72,7 +88,7 @@ def draw_chat_area():
                 response.raise_for_status()
                 st.session_state.chat_input = ""
             except requests.exceptions.RequestException as e:
-                st.error(f"메시지 전송 실패: {e}")
+                handle_request_error(e, "메시지 전송 실패")
 
 if __name__ == "__main__":
     st.session_state.game_state = {

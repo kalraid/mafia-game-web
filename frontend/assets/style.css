@@ -55,11 +55,10 @@ body {
     background-color: #424242;
     color: #9E9E9E;
     text-decoration: line-through;
-    position: relative;
+    position: relative; /* Needed for the overlay's absolute positioning */
 }
 
-.player-card.is-dead::after {
-    content: '사망';
+.death-overlay {
     position: absolute;
     top: 0;
     left: 0;
@@ -68,10 +67,13 @@ body {
     background-color: var(--overlay-dead);
     color: white;
     display: flex;
+    flex-direction: column;
     justify-content: center;
     align-items: center;
-    font-size: 1.2em;
+    font-size: 1.1em;
     font-weight: bold;
+    text-align: center;
+    line-height: 1.4;
 }
 
 .player-card.is-suspected-1 {
@@ -165,27 +167,27 @@ body {
 }
 
 .phase-day-chat {
-    background-color: #FFF8E1; /* 밝은 노란색 */
+    background-color: #FFF8E1;
     color: #333;
 }
 
 .phase-day-vote {
-    background-color: #F39C12; /* 주황색 */
+    background-color: #F39C12;
     color: white;
 }
 
 .phase-final-speech {
-    background-color: #E67E22; /* 오렌지 */
+    background-color: #E67E22;
     color: white;
 }
 
 .phase-night {
-    background-color: #1A1A2E; /* 짙은 파란색 */
+    background-color: #1A1A2E;
     color: white;
 }
 
 .phase-result {
-    background-color: #8E44AD; /* 보라색 */
+    background-color: #8E44AD;
     color: white;
 }
 
@@ -201,4 +203,36 @@ body {
 
 .night-theme .chat-container {
     border-color: var(--border-night);
+}
+
+/* --- Player Card Link Wrapper --- */
+.player-card-link {
+    text-decoration: none;
+    color: inherit; /* Inherit text color from parent */
+}
+
+/* Disabled state for clickable cards */
+.player-card.is-disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+
+
+/* Style for messages from dead players */
+.dead-message .message-content {
+    text-decoration: line-through;
+    opacity: 0.7;
+}
+
+/* Style for highlighting messages of a selected player */
+.highlight-message {
+    background-color: #f0f8ff !important; /* AliceBlue */
+    border: 1px solid #add8e6 !important; /* LightBlue */
+    border-radius: 15px; /* Keep the rounded corners */
+}
+
+.night-theme .highlight-message {
+    background-color: #2a2a4a !important;
+    border: 1px solid #4a4a6a !important;
 }

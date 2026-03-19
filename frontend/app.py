@@ -35,11 +35,21 @@ def handle_message(message):
                 st.session_state.game_state["chat_history"] = []
             st.session_state.game_state["chat_history"].append(payload)
             st.rerun()
+        elif event == "player_death":
+            dead_player_name = payload.get("player")
+            dead_player_role = payload.get("role")
+            
+            if "players" in st.session_state.game_state:
+                for p in st.session_state.game_state["players"]:
+                    if p["name"] == dead_player_name:
+                        p["is_alive"] = False
+                        p["role"] = dead_player_role # Reveal role on death
+                        break
+            st.rerun()
         elif event == "game_over":
             st.session_state.game_state.update(payload)
             st.session_state.page = "result"
             st.rerun()
-        # Add handlers for other events like player_death etc.
 
     except json.JSONDecodeError:
         print(f"Could not decode message: {message}")

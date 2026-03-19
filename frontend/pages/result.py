@@ -20,10 +20,24 @@ def draw_result():
     st.markdown("---")
     st.subheader("최종 직업 공개:")
 
+    cause_map = {
+        "vote": "투표",
+        "night_attack": "밤 공격",
+    }
+
     for player in players:
         role = player.get("role", "Unknown")
-        status = "💀" if not player.get("is_alive", True) else "✅"
-        st.write(f"{player.get('name', 'Unknown')} → {role} {status}")
+        name = player.get("name", "Unknown")
+
+        if player.get("is_alive", True):
+            status_text = f"✅ 생존"
+        else:
+            death_round = player.get("death_round", "")
+            death_cause = player.get("death_cause", "")
+            cause_text = cause_map.get(death_cause, death_cause)
+            status_text = f"💀 ({death_round}라운드 {cause_text} 사망)"
+
+        st.write(f"**{name}** → {role} {status_text}")
 
     st.markdown("---")
 
@@ -43,9 +57,9 @@ if __name__ == "__main__":
         "winner": "citizen",
         "reason": "마피아가 모두 제거되었습니다.",
         "players": [
-            {"name": "김민준", "role": "마피아", "is_alive": False},
+            {"name": "김민준", "role": "마피아", "is_alive": False, "death_round": 3, "death_cause": "vote"},
             {"name": "박서연", "role": "경찰", "is_alive": True},
-            {"name": "이지호", "role": "시민", "is_alive": False},
+            {"name": "이지호", "role": "시민", "is_alive": False, "death_round": 1, "death_cause": "night_attack"},
             {"name": "최수아", "role": "의사", "is_alive": True},
         ]
     }

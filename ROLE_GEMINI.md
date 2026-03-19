@@ -12,6 +12,7 @@
 Claude(기획자)가 작성한 UI 설계 문서를 기반으로
 Streamlit 화면, WebSocket 클라이언트, 사용자 인터랙션을 구현합니다.
 문서 파일은 직접 작업 및 수정하지 않습니다. 
+피일 내용 수정시에 powershell or shell 을 사용하지 말것
 ```
 
 ---

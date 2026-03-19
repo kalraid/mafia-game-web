@@ -16,3 +16,8 @@ pytest>=8.0.0
 
 streamlit>=1.32.0
 streamlit-websocket-client==0.0.1
+
+# For E2E Testing
+playwright>=1.40.0
+pytest-playwright>=0.4.0
+
