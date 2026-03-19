@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import asyncio
+import os
+import random
 from typing import Any, Dict, TypedDict
 
 from backend.agents.player_agent import AgentInput, AgentOutput, PlayerAgent
@@ -8,7 +11,7 @@ from backend.mcp.tools import MCPGameTools
 from backend.supervisors.citizen import CitizenSupervisor
 from backend.supervisors.mafia import MafiaSupervisor
 from backend.supervisors.neutral import NeutralSupervisor
-from backend.models.game import GameState, Phase
+from backend.models.game import GameState, Phase, Team
 
 from langgraph.graph import StateGraph, END
 
@@ -47,6 +50,8 @@ class AgentGraph:
         day_chat_graph.add_node("run_agent", _run_agent_node)
         day_chat_graph.set_entry_point("run_agent")
         day_chat_graph.add_edge("run_agent", END)
+        # State에 PlayerAgent/AgentInput 등 비직렬화 객체가 있어 checkpointer 미사용.
+        # 추후 상태를 직렬화 가능하게 바꾸면 thread_id 기준 Redis/MemorySaver 연동 가능.
         self._agent_call_graph = day_chat_graph.compile()
 
     def _issue_directives_for_phase(self, state: GameState) -> None:
@@ -68,7 +73,13 @@ class AgentGraph:
             state.directives.extend(self.neutral_supervisor.issue_directives(state, reports=[]))
             return
 
-        # Night 계열: 능력 사용 지시 (Phase.NIGHT_ABILITY에서만 의미 있게 적용)
+        # Night 계열: 마피아 협의 (NIGHT_MAFIA) / 능력 사용 (NIGHT_ABILITY)
+        if state.phase == Phase.NIGHT_MAFIA:
+            # 마피아 쪽만 실제로 발언하도록 GameRunner/실행 로직에서 필터링한다.
+            # 여기서는 마피아가 참고할 전략/은폐 지시를 우선 주입한다.
+            state.directives.extend(self.mafia_supervisor.issue_concealment_directives(state))
+            return
+
         if state.phase == Phase.NIGHT_ABILITY:
             # citizen/mafia/neutral이 ability_strategy directive를 생성하도록 확장 예정
             if hasattr(self.citizen_supervisor, "issue_night_ability_directives"):
@@ -81,6 +92,16 @@ class AgentGraph:
 
         # 그 외 phase는 directive 없음
         return
+
+    async def _speech_delay(self, agent: PlayerAgent) -> None:
+        """persona.verbosity 기반 발언 전 딜레이. CI/테스트는 최소화."""
+        if os.getenv("CI") or os.getenv("MAFIA_USE_LLM", "1").strip().lower() in ("0", "false", "no"):
+            await asyncio.sleep(0.05)
+            return
+        verbosity = getattr(agent.persona, "verbosity", 0.5)
+        base = 15 * (1.0 - verbosity)
+        jitter = random.uniform(0, 3)
+        await asyncio.sleep(max(0.05, base + jitter))
 
     def _directive_hint_for_agent(self, state: GameState, agent_id: str) -> str | None:
         directives = [d for d in state.directives if d.target_agent == agent_id]
@@ -103,16 +124,18 @@ class AgentGraph:
             if not player.is_alive:
                 continue
 
+            # 발언 타이밍: verbosity 낮을수록 늦게 (과묵할수록 늦게), CI/테스트는 최소 딜레이
+            await self._speech_delay(agent)
+
             agent_input = AgentInput(
                 game_state=state,
                 my_state=player,
                 supervisor_directive=self._directive_hint_for_agent(state, agent_id),
             )
+            config = {"configurable": {"thread_id": f"{state.game_id}_{agent_id}"}}
             graph_state = await self._agent_call_graph.ainvoke(
-                {
-                    "agent": agent,
-                    "agent_input": agent_input,
-                }
+                {"agent": agent, "agent_input": agent_input},
+                config=config,
             )
             output: AgentOutput = graph_state["agent_output"]
 
@@ -150,8 +173,10 @@ class AgentGraph:
                 my_state=player,
                 supervisor_directive=self._directive_hint_for_agent(state, agent_id),
             )
+            config = {"configurable": {"thread_id": f"{state.game_id}_{agent_id}"}}
             graph_state = await self._agent_call_graph.ainvoke(
-                {"agent": agent, "agent_input": agent_input}
+                {"agent": agent, "agent_input": agent_input},
+                config=config,
             )
             output: AgentOutput = graph_state["agent_output"]
 
@@ -188,8 +213,10 @@ class AgentGraph:
                 my_state=player,
                 supervisor_directive=self._directive_hint_for_agent(state, agent_id),
             )
+            config = {"configurable": {"thread_id": f"{state.game_id}_{agent_id}"}}
             graph_state = await self._agent_call_graph.ainvoke(
-                {"agent": agent, "agent_input": agent_input}
+                {"agent": agent, "agent_input": agent_input},
+                config=config,
             )
             output: AgentOutput = graph_state["agent_output"]
 
@@ -207,4 +234,40 @@ class AgentGraph:
                 self.mcp_tools.send_chat(agent_id=agent_id, content=output.speech, channel="global")
 
             results[agent_id] = output
+        return results
+
+    async def run_night_mafia_round(self, state: GameState) -> Dict[str, AgentOutput]:
+        if state.phase != Phase.NIGHT_MAFIA:
+            return {}
+
+        self._issue_directives_for_phase(state)
+
+        results: Dict[str, AgentOutput] = {}
+        for agent_id, agent in self.agents.items():
+            player = agent.player
+            if not player.is_alive:
+                continue
+            if player.team != Team.MAFIA:
+                continue
+
+            await self._speech_delay(agent)
+
+            agent_input = AgentInput(
+                game_state=state,
+                my_state=player,
+                supervisor_directive=self._directive_hint_for_agent(state, agent_id),
+            )
+            config = {"configurable": {"thread_id": f"{state.game_id}_{agent_id}"}}
+            graph_state = await self._agent_call_graph.ainvoke(
+                {"agent": agent, "agent_input": agent_input},
+                config=config,
+            )
+            output: AgentOutput = graph_state["agent_output"]
+
+            if output.speech:
+                # 밤 마피아 협의는 전용 채널로 브로드캐스트(프론트 스타일링용).
+                self.mcp_tools.send_chat(agent_id=agent_id, content=output.speech, channel="mafia_secret")
+
+            results[agent_id] = output
+
         return results

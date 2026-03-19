@@ -10,16 +10,42 @@ class CitizenSupervisor:
     def __init__(self, supervisor_id: str = "citizen_supervisor") -> None:
         self.supervisor_id = supervisor_id
 
+    def _choose_suspect(self, state: GameState, reports: List[Report]) -> str | None:
+        """
+        의심 대상: reports에 '마피아' 등으로 언급된 플레이어 우선, 없으면 trust_score 가장 낮은 AI.
+        """
+        alive_ai = [p for p in state.players if not p.is_human and p.is_alive]
+        if not alive_ai:
+            return None
+
+        # reports에서 "X는 마피아" / "mafia" 등으로 지목된 player id 수집
+        reported_suspects: List[str] = []
+        for r in reports:
+            content_lower = (r.content or "").lower()
+            if "mafia" in content_lower or "마피아" in r.content:
+                # player id 패턴: 영문/한글 ID 추출 (간단히 단어 나열 가정)
+                for p in alive_ai:
+                    if p.id in r.content or p.name in r.content:
+                        reported_suspects.append(p.id)
+                        break
+
+        if reported_suspects:
+            return reported_suspects[0]
+
+        # trust_score 가장 낮은 플레이어를 의심 대상
+        suspect = min(alive_ai, key=lambda p: p.trust_score)
+        return suspect.id
+
     def issue_directives(self, state: GameState, reports: List[Report]) -> List[Directive]:
         """
-        Phase 4 스켈레톤: 간단히 의심 대상 1명을 정해 시민 에이전트에게 집중 추궁 지시를 내리는 형태.
-        실제 trust_score 기반 전략은 이후 단계에서 구현.
+        trust_score 기반 의심 대상 선정 + reports 반영.
         """
         alive_ai_players = [p for p in state.players if not p.is_human and p.is_alive]
         if not alive_ai_players:
             return []
 
-        suspect = alive_ai_players[0]
+        suspect_id = self._choose_suspect(state, reports)
+        suspect_name = next((p.name for p in state.players if p.id == suspect_id), suspect_id or "한 명")
         directives: List[Directive] = []
         for player in alive_ai_players:
             directives.append(
@@ -27,7 +53,7 @@ class CitizenSupervisor:
                     target_agent=player.id,
                     from_=self.supervisor_id,
                     type="speech_strategy",
-                    content=f"{suspect.name}을(를) 집중적으로 의심하는 발언을 해라.",
+                    content=f"{suspect_name}을(를) 집중적으로 의심하는 발언을 해라.",
                     priority="medium",
                     round=state.round,
                 )

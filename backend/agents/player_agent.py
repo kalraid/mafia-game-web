@@ -78,14 +78,38 @@ class PlayerAgent:
         # Phase 2 핵심: LLM 연동(키가 없으면 안전 폴백)
         decision = await self._decide_with_llm(agent_input)
 
+        # Phase별로 허용된 필드만 남겨서 "엉뚱한 행동"이 섞이지 않게 가드.
+        phase = agent_input.game_state.phase
+        if phase == Phase.DAY_CHAT:
+            speech = decision.speech
+            vote_target = None
+            ability = None
+            ability_target = None
+        elif phase in (Phase.DAY_VOTE, Phase.FINAL_VOTE):
+            speech = None
+            vote_target = decision.vote_target
+            ability = None
+            ability_target = None
+        elif phase == Phase.NIGHT_MAFIA:
+            # 밤 마피아 협의: speech만 허용(투표/능력 금지)
+            speech = decision.speech
+            vote_target = None
+            ability = None
+            ability_target = None
+        else:
+            speech = decision.speech
+            vote_target = decision.vote_target
+            ability = decision.ability
+            ability_target = decision.ability_target
+
         return AgentOutput(
-            speech=decision.speech,
+            speech=speech,
             action=(
-                {"type": decision.ability, "target": decision.ability_target}
-                if decision.ability is not None
+                {"type": ability, "target": ability_target}
+                if ability is not None and ability_target is not None
                 else None
             ),
-            vote=decision.vote_target,
+            vote=vote_target,
             internal_notes=decision.reasoning,
         )
 
@@ -109,6 +133,12 @@ class PlayerAgent:
                 return AgentDecision(
                     vote_target=target,
                     reasoning="fallback: random vote target",
+                    confidence=0.0,
+                )
+            if phase == Phase.NIGHT_MAFIA:
+                return AgentDecision(
+                    speech=f"마피아로서의 합의를 이어가자. 다음 타겟을 정하자.",
+                    reasoning="fallback: night mafia speech only",
                     confidence=0.0,
                 )
             if phase == Phase.NIGHT_ABILITY:
@@ -201,6 +231,11 @@ class PlayerAgent:
             )
         elif phase in (Phase.DAY_VOTE, Phase.FINAL_VOTE):
             phase_instruction = "현재 Phase는 낮 투표이다. alive한 player_id 중 vote_target을 선택해라."
+        elif phase == Phase.NIGHT_MAFIA:
+            phase_instruction = (
+                "현재 Phase는 밤 마피아 협의이다. speech만 작성해라(마피아 협의 채널). "
+                "vote/ability 필드는 null로 둬라."
+            )
         elif phase == Phase.NIGHT_ABILITY:
             allowed = self._allowed_ability_for_role(self.player.role)
             if not allowed:

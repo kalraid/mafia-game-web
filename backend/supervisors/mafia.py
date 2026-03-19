@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import random
 from typing import List
 
 from backend.models.directive import Directive, Report
-from backend.models.game import GameState, Team
+from backend.models.game import GameState, Team, Role
 
 
 class MafiaSupervisor:
@@ -12,13 +13,23 @@ class MafiaSupervisor:
 
     def choose_kill_target(self, state: GameState, reports: List[Report]) -> str | None:
         """
-        Phase 4 스켈레톤: 단순히 첫 번째 시민 팀 플레이어를 제거 대상으로 선택.
-        이후 문서의 우선순위(경찰 > 의사 > 영향력 큰 시민)를 반영해 고도화 예정.
+        AGENT_DESIGN 우선순위: 1) 경찰(detective), 2) 의사(doctor), 3) trust_score 높은 시민, 4) 무작위.
         """
-        for p in state.players:
-            if p.is_alive and p.team != Team.MAFIA:
-                return p.id
-        return None
+        candidates = [p for p in state.players if p.is_alive and p.team != Team.MAFIA]
+        if not candidates:
+            return None
+
+        # 1순위: detective
+        detectives = [p for p in candidates if p.role == Role.DETECTIVE]
+        if detectives:
+            return random.choice(detectives).id
+        # 2순위: doctor
+        doctors = [p for p in candidates if p.role == Role.DOCTOR]
+        if doctors:
+            return random.choice(doctors).id
+        # 3순위: trust_score 높은 시민 (영향력 큰 시민)
+        candidates_sorted = sorted(candidates, key=lambda p: -p.trust_score)
+        return candidates_sorted[0].id
 
     def issue_concealment_directives(self, state: GameState) -> List[Directive]:
         """

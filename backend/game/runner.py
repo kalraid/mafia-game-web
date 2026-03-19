@@ -82,6 +82,8 @@ class GameRunner:
             await self.agent_graph.run_day_chat_round(self.engine.state)
         elif phase in (Phase.DAY_VOTE, Phase.FINAL_VOTE):
             await self.agent_graph.run_vote_round(self.engine.state)
+        elif phase == Phase.NIGHT_MAFIA:
+            await self.agent_graph.run_night_mafia_round(self.engine.state)
         elif phase == Phase.NIGHT_ABILITY:
             await self.agent_graph.run_night_ability_round(self.engine.state)
 

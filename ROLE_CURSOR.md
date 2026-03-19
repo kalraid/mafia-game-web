@@ -51,6 +51,8 @@ FastAPI 서버, AI Agent 시스템, WebSocket 통신, 배포 환경을 구현합
 | `AGENT_DESIGN.md` | LangGraph, 슈퍼바이저, RAG, MCP, A2A 설계 |
 | `GAME_RULES.md` | 게임 로직 구현 기준 |
 | `TASK_PLAN.md` | 작업 순서 및 우선순위 |
+| `TECH_ARCHITECTURE.md` | BACKEND-FRONTEND 간 통신구조 및 API |
+| `WORK_ORDER_CURSOR.md` | 기획자의 작업지시서 |
 
 ---
 
