@@ -180,6 +180,7 @@ class PlayerAgent:
         try:
             from langchain_anthropic import ChatAnthropic
             from langchain_core.messages import SystemMessage, HumanMessage
+            from langchain_core.tools import tool
         except Exception:
             return fallback()
 
@@ -277,12 +278,72 @@ class PlayerAgent:
         messages = [SystemMessage(content=system_prompt), HumanMessage(content=str(human_prompt))]
 
         try:
+            # C-2 호환 구현: bind_tools를 우선 시도해 LLM이 행동을 "도구 호출"로 선택하게 한다.
+            @tool
+            def send_chat(content: str) -> str:
+                """낮/밤 대화에서 발언 내용을 생성한다."""
+                return content
+
+            @tool
+            def submit_vote(target_id: str) -> str:
+                """투표 대상 player_id를 선택한다."""
+                return target_id
+
+            @tool
+            def use_ability(ability: str, target_id: str) -> str:
+                """능력 종류와 대상을 선택한다."""
+                return f"{ability}:{target_id}"
+
+            tool_llm = llm.bind_tools([send_chat, submit_vote, use_ability])
+            tool_msg = await asyncio.to_thread(tool_llm.invoke, messages)
+            tool_calls = getattr(tool_msg, "tool_calls", []) or []
+            decision_from_tools = self._decision_from_tool_calls(tool_calls=tool_calls, phase=phase)
+            if decision_from_tools is not None:
+                return decision_from_tools
+
             structured_llm = llm.with_structured_output(AgentDecision)
             # with_structured_output은 sync 호출이므로 async에서 to_thread로 감싼다.
             decision: AgentDecision = await asyncio.to_thread(structured_llm.invoke, messages)
             return decision
         except Exception:
             return fallback()
+
+    def _decision_from_tool_calls(self, tool_calls: list[dict], phase: Phase) -> AgentDecision | None:
+        if not tool_calls:
+            return None
+        first = tool_calls[0]
+        name = str(first.get("name", ""))
+        args = first.get("args", {}) or {}
+        if not isinstance(args, dict):
+            args = {}
+
+        if name == "send_chat" and phase in (Phase.DAY_CHAT, Phase.NIGHT_MAFIA):
+            content = str(args.get("content", "")).strip()
+            if content:
+                return AgentDecision(
+                    speech=content,
+                    reasoning="tool_call: send_chat",
+                    confidence=0.7,
+                )
+        if name == "submit_vote" and phase in (Phase.DAY_VOTE, Phase.FINAL_VOTE):
+            target_id = str(args.get("target_id", "")).strip()
+            if target_id:
+                return AgentDecision(
+                    vote_target=target_id,
+                    reasoning="tool_call: submit_vote",
+                    confidence=0.7,
+                )
+        if name == "use_ability" and phase == Phase.NIGHT_ABILITY:
+            ability = str(args.get("ability", "")).strip()
+            target_id = str(args.get("target_id", "")).strip()
+            if ability and target_id:
+                return AgentDecision(
+                    ability=ability,
+                    ability_target=target_id,
+                    reasoning="tool_call: use_ability",
+                    confidence=0.7,
+                )
+        return None
 
     def _allowed_ability_for_role(self, role: Role) -> list[str]:
         # GAME_RULES 기준 최소 매핑 (추후 더 정교화)

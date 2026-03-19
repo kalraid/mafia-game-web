@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import os
 import random
-from typing import Any, Dict, TypedDict
+from typing import Dict, Optional, TypedDict
 
 from backend.agents.player_agent import AgentInput, AgentOutput, PlayerAgent
 from backend.game.engine import GameEngine
@@ -37,22 +37,54 @@ class AgentGraph:
         self.mafia_supervisor = mafia_supervisor or MafiaSupervisor()
         self.neutral_supervisor = neutral_supervisor or NeutralSupervisor()
 
-        class _DayChatState(TypedDict):
-            agent: Any
-            agent_input: AgentInput
-            agent_output: AgentOutput
+        class _AgentCallState(TypedDict):
+            agent_id: str
+            supervisor_directive: Optional[str]
+            agent_output: Dict[str, object]
 
-        async def _run_agent_node(state: _DayChatState) -> Dict[str, AgentOutput]:
-            output = await state["agent"].run(state["agent_input"])
-            return {"agent_output": output}
+        async def _run_agent_node(state: _AgentCallState) -> Dict[str, Dict[str, object]]:
+            agent_id = state["agent_id"]
+            agent = self.agents[agent_id]
+            agent_input = AgentInput(
+                game_state=self.engine.state,
+                my_state=agent.player,
+                supervisor_directive=state.get("supervisor_directive"),
+            )
+            output = await agent.run(agent_input)
+            return {
+                "agent_output": {
+                    "speech": output.speech,
+                    "action": output.action,
+                    "vote": output.vote,
+                    "internal_notes": output.internal_notes,
+                }
+            }
 
-        day_chat_graph = StateGraph(_DayChatState)
+        day_chat_graph = StateGraph(_AgentCallState)
         day_chat_graph.add_node("run_agent", _run_agent_node)
         day_chat_graph.set_entry_point("run_agent")
         day_chat_graph.add_edge("run_agent", END)
-        # State에 PlayerAgent/AgentInput 등 비직렬화 객체가 있어 checkpointer 미사용.
-        # 추후 상태를 직렬화 가능하게 바꾸면 thread_id 기준 Redis/MemorySaver 연동 가능.
-        self._agent_call_graph = day_chat_graph.compile()
+        # C-5: Redis checkpointer를 우선 시도하고, 실패 시 일반 compile로 폴백.
+        # thread_id는 ainvoke(config)에서 game_id+agent_id 조합으로 전달.
+        self._agent_call_graph = self._compile_agent_graph(day_chat_graph)
+
+    def _compile_agent_graph(self, graph: StateGraph) -> object:
+        if os.getenv("MAFIA_USE_REDIS_CHECKPOINTER", "0").strip().lower() not in {"1", "true", "yes"}:
+            return graph.compile()
+
+        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+        try:
+            import redis
+            from langgraph.checkpoint.redis import RedisSaver
+
+            redis_client = redis.from_url(redis_url, socket_connect_timeout=1, socket_timeout=1)
+            checkpointer = RedisSaver(redis_client)
+            setup_fn = getattr(checkpointer, "setup", None)
+            if callable(setup_fn):
+                setup_fn()
+            return graph.compile(checkpointer=checkpointer)
+        except Exception:
+            return graph.compile()
 
     def _issue_directives_for_phase(self, state: GameState) -> None:
         """
@@ -112,6 +144,25 @@ class AgentGraph:
         directives.sort(key=lambda d: priority_order.get(getattr(d, "priority", "medium"), 1))
         return "\n".join(d.content for d in directives)
 
+    async def _invoke_agent(self, state: GameState, agent_id: str) -> AgentOutput:
+        config = {"configurable": {"thread_id": f"{state.game_id}_{agent_id}"}}
+        graph_state = await self._agent_call_graph.ainvoke(
+            {
+                "agent_id": agent_id,
+                "supervisor_directive": self._directive_hint_for_agent(state, agent_id),
+            },
+            config=config,
+        )
+        out = graph_state.get("agent_output", {})
+        if not isinstance(out, dict):
+            out = {}
+        return AgentOutput(
+            speech=out.get("speech") if isinstance(out.get("speech"), str) else None,
+            action=out.get("action") if isinstance(out.get("action"), dict) else None,
+            vote=out.get("vote") if isinstance(out.get("vote"), str) else None,
+            internal_notes=out.get("internal_notes") if isinstance(out.get("internal_notes"), str) else None,
+        )
+
     async def run_day_chat_round(self, state: GameState) -> Dict[str, AgentOutput]:
         if state.phase != Phase.DAY_CHAT:
             return {}
@@ -126,18 +177,7 @@ class AgentGraph:
 
             # 발언 타이밍: verbosity 낮을수록 늦게 (과묵할수록 늦게), CI/테스트는 최소 딜레이
             await self._speech_delay(agent)
-
-            agent_input = AgentInput(
-                game_state=state,
-                my_state=player,
-                supervisor_directive=self._directive_hint_for_agent(state, agent_id),
-            )
-            config = {"configurable": {"thread_id": f"{state.game_id}_{agent_id}"}}
-            graph_state = await self._agent_call_graph.ainvoke(
-                {"agent": agent, "agent_input": agent_input},
-                config=config,
-            )
-            output: AgentOutput = graph_state["agent_output"]
+            output = await self._invoke_agent(state, agent_id)
 
             # Agent output → MCP tool calls (GameState 업데이트)
             if output.speech:
@@ -168,17 +208,7 @@ class AgentGraph:
             player = agent.player
             if not player.is_alive:
                 continue
-            agent_input = AgentInput(
-                game_state=state,
-                my_state=player,
-                supervisor_directive=self._directive_hint_for_agent(state, agent_id),
-            )
-            config = {"configurable": {"thread_id": f"{state.game_id}_{agent_id}"}}
-            graph_state = await self._agent_call_graph.ainvoke(
-                {"agent": agent, "agent_input": agent_input},
-                config=config,
-            )
-            output: AgentOutput = graph_state["agent_output"]
+            output = await self._invoke_agent(state, agent_id)
 
             if output.vote:
                 self.mcp_tools.submit_vote(agent_id=agent_id, target_id=output.vote)
@@ -208,17 +238,7 @@ class AgentGraph:
             player = agent.player
             if not player.is_alive:
                 continue
-            agent_input = AgentInput(
-                game_state=state,
-                my_state=player,
-                supervisor_directive=self._directive_hint_for_agent(state, agent_id),
-            )
-            config = {"configurable": {"thread_id": f"{state.game_id}_{agent_id}"}}
-            graph_state = await self._agent_call_graph.ainvoke(
-                {"agent": agent, "agent_input": agent_input},
-                config=config,
-            )
-            output: AgentOutput = graph_state["agent_output"]
+            output = await self._invoke_agent(state, agent_id)
 
             if output.action:
                 ability_type = output.action.get("type")
@@ -251,18 +271,7 @@ class AgentGraph:
                 continue
 
             await self._speech_delay(agent)
-
-            agent_input = AgentInput(
-                game_state=state,
-                my_state=player,
-                supervisor_directive=self._directive_hint_for_agent(state, agent_id),
-            )
-            config = {"configurable": {"thread_id": f"{state.game_id}_{agent_id}"}}
-            graph_state = await self._agent_call_graph.ainvoke(
-                {"agent": agent, "agent_input": agent_input},
-                config=config,
-            )
-            output: AgentOutput = graph_state["agent_output"]
+            output = await self._invoke_agent(state, agent_id)
 
             if output.speech:
                 # 밤 마피아 협의는 전용 채널로 브로드캐스트(프론트 스타일링용).

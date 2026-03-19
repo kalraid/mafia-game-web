@@ -102,3 +102,62 @@ async def _test_websocket_vote_and_use_ability_update_game_state() -> None:
     last = _decode_last_event(ws)
     assert last["event"] == "ability_result"
 
+
+def test_websocket_mafia_secret_channel_filtering() -> None:
+    asyncio.run(_test_websocket_mafia_secret_channel_filtering())
+
+
+async def _test_websocket_mafia_secret_channel_filtering() -> None:
+    game_id = "ws_filter"
+    registry = GameRegistry()
+    mgr = ConnectionManager(registry=registry)
+    game = registry.get_or_create(game_id)
+    game.state.players = [
+        Player(id="m1", name="Mafia", role=Role.MAFIA, team=Team.MAFIA, is_alive=True),
+        Player(id="s1", name="Spy", role=Role.SPY, team=Team.NEUTRAL, is_alive=True),
+        Player(id="c1", name="Citizen", role=Role.CITIZEN, team=Team.CITIZEN, is_alive=True),
+    ]
+
+    ws_mafia = DummyWebSocket()
+    ws_spy = DummyWebSocket()
+    ws_citizen = DummyWebSocket()
+    await mgr.connect(game_id=game_id, websocket=ws_mafia, player_id="m1")  # type: ignore[arg-type]
+    await mgr.connect(game_id=game_id, websocket=ws_spy, player_id="s1")  # type: ignore[arg-type]
+    await mgr.connect(game_id=game_id, websocket=ws_citizen, player_id="c1")  # type: ignore[arg-type]
+
+    # mafia_secret: 마피아에게만 전송
+    await mgr.broadcast(
+        game_id,
+        ServerToClientEvent(
+            event="chat_broadcast",
+            payload={
+                "sender": "m1",
+                "content": "secret",
+                "channel": "mafia_secret",
+                "timestamp": "t",
+                "is_ai": True,
+            },
+        ),
+    )
+    assert len(ws_mafia.sent) == 1
+    assert len(ws_spy.sent) == 0
+    assert len(ws_citizen.sent) == 0
+
+    # spy_listen: 스파이 + 마피아에게 전송
+    await mgr.broadcast(
+        game_id,
+        ServerToClientEvent(
+            event="chat_broadcast",
+            payload={
+                "sender": "m1",
+                "content": "listen",
+                "channel": "spy_listen",
+                "timestamp": "t",
+                "is_ai": True,
+            },
+        ),
+    )
+    assert len(ws_mafia.sent) == 2
+    assert len(ws_spy.sent) == 1
+    assert len(ws_citizen.sent) == 0
+

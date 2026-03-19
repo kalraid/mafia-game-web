@@ -130,3 +130,24 @@ def test_agent_graph_night_mafia_sends_mafia_secret_chat() -> None:
     assert any(msg.channel == "mafia_secret" for msg in engine.state.chat_history)
     assert all(msg.channel == "mafia_secret" for msg in engine.state.chat_history)
 
+
+def test_player_agent_decision_from_tool_calls_vote() -> None:
+    state = GameState(
+        game_id="g1",
+        phase=Phase.DAY_VOTE,
+        round=1,
+        timer_seconds=60,
+        players=[
+            Player(id="p1", name="A", role=Role.CITIZEN, team=Team.CITIZEN, is_alive=True, is_human=False),
+            Player(id="p2", name="B", role=Role.MAFIA, team=Team.MAFIA, is_alive=True, is_human=False),
+        ],
+        chat_history=[],
+    )
+    agent = PlayerAgent(agent_id="p1", persona=DEFAULT_PERSONAS[0], player=state.players[0])
+    decision = agent._decision_from_tool_calls(
+        tool_calls=[{"name": "submit_vote", "args": {"target_id": "p2"}}],
+        phase=Phase.DAY_VOTE,
+    )
+    assert decision is not None
+    assert decision.vote_target == "p2"
+

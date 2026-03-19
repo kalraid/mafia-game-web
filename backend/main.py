@@ -60,7 +60,8 @@ async def health() -> dict[str, str]:
 
 @app.websocket("/ws/{game_id}")
 async def websocket_endpoint(websocket: WebSocket, game_id: str) -> None:
-    await ws_manager.connect(game_id, websocket)
+    player_id = websocket.query_params.get("player_id")
+    await ws_manager.connect(game_id, websocket, player_id=player_id)
     _ensure_game_runner(game_id)
     try:
         while True:
