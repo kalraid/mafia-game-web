@@ -1,8 +1,9 @@
 # PRD: AI 웹 마피아 게임 (AI Mafia Online)
 
-> **문서 버전**: v1.0  
-> **작성일**: 2026-03-18  
-> **상태**: 초안 (Draft)
+> **문서 버전**: v1.1  
+> **최초 작성일**: 2026-03-18  
+> **최종 업데이트**: 2026-03-18  
+> **상태**: 개발 진행 중 (스캐폴딩 완료)
 
 ---
 
@@ -30,59 +31,85 @@
 
 ```
 Frontend   : Streamlit (WebSocket 기반 실시간 UI)
-Backend    : FastAPI (단일 서버 권장, 필요 시 서비스 분리)
-통신       : WebSocket (Socket.IO over FastAPI)
-AI 프레임워크: LangChain + LangGraph
-지식 검색   : RAG (ChromaDB or FAISS)
+Backend    : FastAPI (단일 서버)
+통신       : WebSocket (FastAPI 기반)
+AI 프레임워크: LangChain + LangGraph (ReAct 패턴)
+지식 검색   : RAG (ChromaDB + sentence-transformers)
 에이전트 통신: MCP (Model Context Protocol) + A2A (Agent-to-Agent)
 LLM        : Claude API (claude-sonnet-4 계열)
+세션 메모리 : Redis + LangGraph Checkpointer (필수)
 ```
 
-> 서버는 **1개 FastAPI 서버**를 기본으로 하되, Agent 부하에 따라 Agent Worker를 별도 프로세스(최대 3개)로 분리 가능한 구조로 설계.
+---
+
+## 3. 구현 범위 정의
+
+### MVP 범위 (반드시 구현)
+- 게임 엔진 코어 (Phase, 타이머, 투표, 직업 능력)
+- AI Agent 기초 (ReAct 패턴, 페르소나, 발언/투표)
+- WebSocket 실시간 채팅
+- Streamlit 기본 UI (채팅창 + 상태창)
+- 슈퍼바이저 + A2A 지시 체계
+- Redis Checkpointer (멀티턴 메모리)
+
+### 2단계 범위 (시간 허용 시)
+- RAG 지식베이스 구축 및 연동
+- MCP Tool 서버 완성
+- UI 스타일링 (낮/밤 테마, 사망 오버레이)
+- 발언 타이밍 자연화 (랜덤 딜레이)
+
+### 로드맵 (추후)
+- 게임 결과 저장 및 리뷰 기능
+- 멀티 게임 세션 지원
+- 모바일 반응형 UI
 
 ---
 
-## 3. 핵심 기능 목록 (Feature List)
+## 4. 핵심 기능 목록 (Feature List)
 
-### 3.1 게임 설정 & 로비
-- [ ] 플레이어 수 선택 (4~20명)
-- [ ] 사용자 닉네임 입력
-- [ ] 직업 구성 설정 (자동 or 수동)
-- [ ] 게임 시작 버튼
+### 4.1 게임 설정 & 로비
+- [🔄] 플레이어 수 선택 (4~20명)
+- [🔄] 사용자 닉네임 입력
+- [🔄] 직업 구성 설정 (자동 or 수동)
+- [🔄] 게임 시작 버튼
 
-### 3.2 AI Agent 시스템
-- [ ] 각 AI 플레이어별 독립 Agent 인스턴스 (LangGraph)
-- [ ] 시민 슈퍼바이저 Agent
-- [ ] 마피아 슈퍼바이저 Agent
-- [ ] 중립 슈퍼바이저 Agent
-- [ ] A2A 통신: 슈퍼바이저 ↔ 하위 Agent 지시 채널
-- [ ] MCP Tool: 게임 상태 조회, 능력 사용, 투표 등록
-- [ ] RAG: 마피아 전략 지식베이스 활용
+### 4.2 AI Agent 시스템
+- [🔄] 각 AI 플레이어별 독립 Agent 인스턴스 (LangGraph ReAct)
+- [🔄] 시민 슈퍼바이저 Agent
+- [🔄] 마피아 슈퍼바이저 Agent
+- [🔄] 중립 슈퍼바이저 Agent
+- [🔄] A2A 통신: 슈퍼바이저 ↔ 하위 Agent 지시 채널
+- [⬜] MCP Tool: 게임 상태 조회, 능력 사용, 투표 등록
+- [⬜] RAG: 마피아 전략 지식베이스 활용
+- [⬜] Redis Checkpointer: Agent 멀티턴 메모리
 
-### 3.3 게임 진행 (Game Loop)
-- [ ] 낮 Phase: 전체 채팅 (3분) → 투표 → 처형
-- [ ] 밤 Phase: 직업별 능력 사용 → 결과 집계
-- [ ] 승리 조건 판정 자동화
-- [ ] 게임 로그 저장
+### 4.3 게임 진행 (Game Loop)
+- [🔄] 낮 Phase: 전체 채팅 (3분) → 투표 → 처형
+- [🔄] 밤 Phase: 직업별 능력 사용 → 결과 집계
+- [🔄] 승리 조건 판정 자동화
+- [⬜] 게임 로그 저장
 
-### 3.4 채팅 시스템
-- [ ] 실시간 WebSocket 채팅
-- [ ] 낮/밤에 따른 채팅 채널 분리 (전체 / 마피아 전용)
-- [ ] AI 발언 딜레이 (자연스러운 타이밍)
-- [ ] 시스템 메시지 (게임 이벤트 알림)
+### 4.4 채팅 시스템
+- [🔄] 실시간 WebSocket 채팅
+- [🔄] 낮/밤에 따른 채팅 채널 분리 (전체 / 마피아 전용)
+- [⬜] AI 발언 딜레이 (자연스러운 타이밍)
+- [🔄] 시스템 메시지 (게임 이벤트 알림)
 
-### 3.5 UI (상세 내용 → UI_DESIGN.md 참조)
-- [ ] 좌측 3/4: 채팅 영역
-- [ ] 우측 1/4: 상태창 (밤낮 표시 / 플레이어 목록 / 버튼)
-- [ ] 사망 플레이어: 검은 천 오버레이
+### 4.5 UI
+- [🔄] 좌측 3/4: 채팅 영역
+- [🔄] 우측 1/4: 상태창 (밤낮 표시 / 플레이어 목록 / 버튼)
+- [⬜] 사망 플레이어: 검은 천 오버레이
+
+> ✅ 완료 / 🔄 스캐폴딩 완료(구현 확인 필요) / ⬜ 미시작
 
 ---
 
-## 4. 게임 규칙 요약 (상세 → GAME_RULES.md)
+## 5. 게임 규칙 요약 (상세 → GAME_RULES.md)
 
 | 항목 | 내용 |
 |------|------|
 | 최대 인원 | 20명 |
+| 직업 수 | 8종 (시민·경찰·의사·점쟁이·마피아·킬러·광대·스파이) |
 | 낮 대화 시간 | 3분 |
 | 마피아 승리 조건 | 마피아 수 ≥ 생존 시민 수 |
 | 시민 승리 조건 | 모든 마피아 제거 |
@@ -91,7 +118,7 @@ LLM        : Claude API (claude-sonnet-4 계열)
 
 ---
 
-## 5. 비기능 요구사항
+## 6. 비기능 요구사항
 
 | 항목 | 요구사항 |
 |------|----------|
@@ -102,7 +129,7 @@ LLM        : Claude API (claude-sonnet-4 계열)
 
 ---
 
-## 6. 관련 문서
+## 7. 관련 문서
 
 | 문서 | 설명 |
 |------|------|
@@ -110,11 +137,13 @@ LLM        : Claude API (claude-sonnet-4 계열)
 | [TECH_ARCHITECTURE.md](./TECH_ARCHITECTURE.md) | 기술 아키텍처 및 시스템 구조 |
 | [AGENT_DESIGN.md](./AGENT_DESIGN.md) | AI Agent 설계 (LangGraph, RAG, MCP, A2A) |
 | [UI_DESIGN.md](./UI_DESIGN.md) | UI/UX 화면 설계 |
-| [TASK_PLAN.md](./TASK_PLAN.md) | 작업 계획 및 우선순위 |
+| [TASK_PLAN.md](./TASK_PLAN.md) | 작업 계획 및 현재 진행 상태 |
+| [RAG_AND_STORAGE_DESIGN.md](./RAG_AND_STORAGE_DESIGN.md) | RAG vs 저장소 설계 결정 |
+| [EVALUATION_REFLECTION.md](./EVALUATION_REFLECTION.md) | 평가 피드백 반영 설계 |
 
 ---
 
-## 7. 사용자 요구사항 원문 정리 (User Input)
+## 8. 사용자 요구사항 원문 정리 (User Input)
 
 > ⚠️ **이 섹션은 사용자가 직접 언급한 내용을 원문 보존한 것입니다.**
 

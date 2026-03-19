@@ -1,7 +1,9 @@
 # 기술 아키텍처 명세서 (TECH_ARCHITECTURE)
 
-> **문서 버전**: v1.0  
-> **작성일**: 2026-03-18
+> **문서 버전**: v1.1  
+> **최초 작성일**: 2026-03-18  
+> **최종 업데이트**: 2026-03-18  
+> **변경 내용**: Redis 필수로 변경 (선택→필수), 메모리 계층 구조 추가
 
 ---
 
@@ -37,16 +39,21 @@
 │  │      AI Agent Pool (최대 19개)               │    │
 │  │  Agent_1 ... Agent_N (각각 LangGraph Node)   │    │
 │  └──────┬──────────────────────────────────────┘    │
-│         │                                            │
-│  ┌──────▼──────────────────────────────────────┐    │
-│  │  Shared Context Store (In-Memory + Redis)    │    │
-│  │  게임 상태, 채팅 히스토리, Agent 메모리       │    │
-│  └─────────────────────────────────────────────┘    │
+└─────────┼────────────────────────────────────────────┘
+          │
+┌─────────▼──────────────────────────────────────────┐
+│              공유 저장소 레이어                       │
 │                                                      │
-│  ┌──────────────────────────────────────────────┐   │
-│  │   RAG Store (ChromaDB / FAISS)               │   │
-│  │   마피아 전략 지식, 게임 규칙 임베딩          │   │
-│  └──────────────────────────────────────────────┘   │
+│  ┌─────────────────────┐  ┌────────────────────┐   │
+│  │  Redis (필수)        │  │ ChromaDB (RAG)     │   │
+│  │  - 게임 세션 상태    │  │ - 전략 지식베이스  │   │
+│  │  - 채팅 히스토리     │  │ - 발언 패턴        │   │
+│  │  - Agent 메모리      │  │ - 상황별 사례      │   │
+│  │  - LangGraph         │  │ - 룰 문서          │   │
+│  │    Checkpointer      │  └────────────────────┘   │
+│  │  - Supervisor        │                            │
+│  │    Directive         │                            │
+│  └─────────────────────┘                            │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -68,15 +75,13 @@ fastapi_main/
 ```
 
 ### 2.2 확장: 서비스 분리 (부하 고려 시)
-Agent 수가 많을 경우 Agent Worker를 별도 프로세스로 분리:
-
 ```
 [서버 A] FastAPI Main    → 게임 엔진 + WebSocket 관리
 [서버 B] Agent Worker 1  → Agent 1~6 (시민 계열)
 [서버 C] Agent Worker 2  → Agent 7~13 (마피아+중립)
 [서버 D] RAG Server      → ChromaDB + 임베딩 서비스
 ```
-> 단, 초기 개발은 단일 서버로 시작하고 성능 테스트 후 분리 여부 결정.
+> 초기 개발은 단일 서버로 시작하고 성능 테스트 후 분리 여부 결정.
 
 ---
 
@@ -86,50 +91,17 @@ Agent 수가 많을 경우 Agent Worker를 별도 프로세스로 분리:
 
 ```json
 // 클라이언트 → 서버
-{
-  "event": "chat_message",
-  "payload": { "content": "나는 시민이야!", "sender": "player" }
-}
-
-{
-  "event": "vote",
-  "payload": { "target": "AI_Player_3" }
-}
-
-{
-  "event": "use_ability",
-  "payload": { "target": "AI_Player_5", "ability": "investigate" }
-}
+{ "event": "chat_message", "payload": { "content": "나는 시민이야!", "sender": "player" } }
+{ "event": "vote", "payload": { "target": "AI_Player_3" } }
+{ "event": "use_ability", "payload": { "target": "AI_Player_5", "ability": "investigate" } }
 
 // 서버 → 클라이언트
-{
-  "event": "chat_broadcast",
-  "payload": {
-    "sender": "AI_Player_2",
-    "content": "나는 광대일리가 없어...",
-    "timestamp": "2026-03-18T14:23:01"
-  }
-}
-
-{
-  "event": "phase_change",
-  "payload": { "phase": "night", "round": 2 }
-}
-
-{
-  "event": "player_death",
-  "payload": { "player": "AI_Player_7", "role": "mafia", "cause": "vote" }
-}
-
-{
-  "event": "game_state_update",
-  "payload": { "players": [...], "phase": "day", "timer": 120 }
-}
-
-{
-  "event": "game_over",
-  "payload": { "winner": "citizen", "reason": "all_mafia_eliminated" }
-}
+{ "event": "chat_broadcast", "payload": { "sender": "AI_Player_2", "content": "...", "timestamp": "...", "is_ai": true } }
+{ "event": "phase_change", "payload": { "phase": "night", "round": 2 } }
+{ "event": "player_death", "payload": { "player": "AI_Player_7", "role": "mafia", "cause": "vote" } }
+{ "event": "game_state_update", "payload": { "players": [...], "phase": "day", "timer": 120 } }
+{ "event": "vote_result", "payload": { "target": "AI_Player_3", "votes": 4, "executed": true } }
+{ "event": "game_over", "payload": { "winner": "citizen", "reason": "all_mafia_eliminated" } }
 ```
 
 ### 3.2 채팅 채널 분리
@@ -155,7 +127,9 @@ class GameState(BaseModel):
     players: List[Player]
     chat_history: List[ChatMessage]
     events: List[GameEvent]
-    winner: Optional[str]  # "citizen" | "mafia" | "jester" | "spy"
+    directives: List[Directive]      # 슈퍼바이저 → Agent 지시
+    reports: List[Report]            # Agent → 슈퍼바이저 보고
+    winner: Optional[str]
 ```
 
 ### 4.2 플레이어 (Player)
@@ -163,12 +137,13 @@ class GameState(BaseModel):
 class Player(BaseModel):
     id: str
     name: str
-    role: Role           # Enum: citizen, detective, doctor, mafia, killer, jester, spy
-    team: Team           # Enum: citizen, mafia, neutral
+    role: Role           # citizen, detective, doctor, fortune_teller,
+                         # mafia, killer, jester, spy
+    team: Team           # citizen, mafia, neutral
     is_alive: bool
-    is_human: bool       # True면 사람 플레이어
+    is_human: bool
     trust_score: float   # 0.0 ~ 1.0 (AI 내부 신뢰도)
-    ability_used: bool   # 이번 밤 능력 사용 여부
+    ability_used: bool
 ```
 
 ### 4.3 채팅 메시지 (ChatMessage)
@@ -184,51 +159,74 @@ class ChatMessage(BaseModel):
 
 ---
 
-## 5. Phase 타이머 관리
+## 5. 메모리 계층 구조 (3단계)
 
 ```
-Phase 순서:
-  DAY_CHAT      → 180초 (3분)
-  DAY_VOTE      → 60초  (1분)
-  FINAL_SPEECH  → 30초  (최후 변론)
-  FINAL_VOTE    → 30초  (찬반 투표)
-  NIGHT_MAFIA   → 90초  (마피아 협의)
-  NIGHT_ABILITY → 60초  (직업 능력)
-  NIGHT_RESULT  → 10초  (결과 공개 대기)
+┌─────────────────────────────────────────────────────┐
+│  L1. Agent 실행 컨텍스트 (In-Memory, 단일 호출)      │
+│      현재 호출에 필요한 정보만 로드                   │
+│      game_state 스냅샷, 최근 채팅 10개, directive    │
+├─────────────────────────────────────────────────────┤
+│  L2. 게임 세션 메모리 (Redis, 게임 종료까지 유지)    │
+│      전체 채팅 히스토리, 이벤트 로그, trust_score    │
+│      LangGraph Checkpointer로 연동                   │
+│      thread_id = f"{game_id}_{agent_id}"            │
+├─────────────────────────────────────────────────────┤
+│  L3. 전략 지식베이스 (ChromaDB, 영구 유지)           │
+│      전략 문서, 발언 패턴, 상황별 사례, 룰 문서      │
+│      게임 간 공유, 의미 기반 검색                    │
+└─────────────────────────────────────────────────────┘
 ```
 
-각 Phase는 서버 측 asyncio 타이머로 관리.  
-타이머 종료 시 자동으로 다음 Phase로 전환 이벤트 발생.
+### Redis 키 설계
+```
+game:{game_id}:state              → 전체 게임 상태 JSON
+game:{game_id}:prologue           → 게임 시작 설정 (인원, 직업 배분)
+game:{game_id}:players            → 플레이어별 정보
+game:{game_id}:chat:{round}       → 라운드별 채팅 히스토리
+game:{game_id}:events             → 게임 이벤트 로그
+game:{game_id}:directives         → 슈퍼바이저 → Agent 지시
+agent:{game_id}:{agent_id}:memory → Agent 개인 관찰 메모리
+```
 
 ---
 
-## 6. 상태 저장소 (Context Store)
+## 6. Phase 타이머 관리
 
-### 6.1 In-Memory (개발/단일 서버)
-- Python `dict` 기반 Game Registry
-- `game_id` → `GameState` 매핑
+```
+DAY_CHAT      → 180초 (3분)
+DAY_VOTE      → 60초  (1분)
+FINAL_SPEECH  → 30초  (최후 변론)
+FINAL_VOTE    → 30초  (찬반 투표)
+NIGHT_MAFIA   → 90초  (마피아 협의)
+NIGHT_ABILITY → 60초  (직업 능력)
+NIGHT_RESULT  → 10초  (결과 공개 대기)
+```
 
-### 6.2 Redis (멀티 서버 확장 시)
-- GameState JSON 직렬화 저장
-- Agent 메모리(대화 히스토리) 분리 저장
-- Pub/Sub으로 서버 간 이벤트 전달
+각 Phase는 서버 측 asyncio 타이머로 관리.  
+타이머 종료 시 자동으로 다음 Phase 전환 이벤트 발생.
 
 ---
 
 ## 7. 기술 의존성 정리
 
 ```
-Python          >= 3.11
-FastAPI         >= 0.110
-uvicorn         (ASGI 서버)
-websockets      (WebSocket 지원)
-streamlit       >= 1.32
-langchain       >= 0.2
-langgraph       >= 0.1
+Python               >= 3.11
+FastAPI              >= 0.110
+uvicorn              (ASGI 서버)
+websockets           (WebSocket 지원)
+streamlit            >= 1.32
+langchain            >= 0.2
+langgraph            >= 0.1
 langchain-anthropic
-chromadb        (RAG 벡터 DB)
-sentence-transformers  (임베딩)
-pydantic        >= 2.0
-asyncio         (비동기 처리)
-redis           (선택적, 멀티서버)
+chromadb             (RAG 벡터 DB)
+sentence-transformers (임베딩)
+pydantic             >= 2.0
+asyncio              (비동기 처리)
+redis                ✅ 필수 (LangGraph Checkpointer + 세션 저장)
+langgraph-checkpoint-redis  (LangGraph Redis 연동)
 ```
+
+> ⚠️ **Redis는 필수**입니다. 단일 서버 구성에서도 LangGraph Checkpointer와
+> Agent 멀티턴 메모리를 위해 반드시 실행되어야 합니다.
+> `docker-compose.yml`에 Redis 서비스를 포함해야 합니다.
