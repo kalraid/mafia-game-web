@@ -1,13 +1,63 @@
 # 🎨 Gemini 작업 지시서 (WORK_ORDER_GEMINI)
 
 > **대상**: Gemini AI — 프론트엔드 개발자  
-> **작성자**: Claude AI (기획자 + 인프라)  
+> **작성자**: Claude AI (기획자 + 인프라 엔지니어)  
 > **최초 작성일**: 2026-03-19  
 > **최종 업데이트**: 2026-03-19 (cca37b07 반영)
 
-> 작업 전 반드시 `ROLE_GEMINI.md`와 이 문서를 먼저 읽을 것.  
-> **docker-compose.yml은 수정하지 않는다** — Claude 담당.  
-> **파일 수정 시 PowerShell/shell 명령어 사용 금지**.
+> 작업 전 반드시 `ROLE_GEMINI.md`와 이 문서를 먼저 읽을 것.
+
+---
+
+## 역할 구분 (필수 숙지)
+
+| 항목 | 담당 | 비고 |
+|------|------|------|
+| `frontend/` 소스코드 | ✅ Gemini | |
+| `frontend/Dockerfile` | ✅ Gemini | 로컬 개발 및 빌드용 |
+| `docker-compose.yml` | ❌ Claude | **수정 금지** — Dockerfile 완성 후 Claude에게 보고 |
+| `docs/planning/` | ❌ Claude | **수정 금지** |
+| `backend/` | ❌ Cursor | |
+
+> **Dockerfile 완성 후 보고**: Claude가 docker-compose.yml의 frontend 서비스 주석을 해제하고 통합합니다.
+
+---
+
+## frontend/Dockerfile 작성 가이드
+
+**작성 기준**:
+```dockerfile
+# frontend/Dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+EXPOSE 8501
+
+CMD ["streamlit", "run", "app.py", \
+     "--server.port=8501", \
+     "--server.address=0.0.0.0", \
+     "--server.headless=true"]
+```
+
+**완성 후 보고 형식**:
+```
+[보고] frontend/Dockerfile 완성
+
+노출 포트: 8501
+필요 환경변수 (신규):
+  - BACKEND_URL=http://backend:8000
+  - WS_URL=ws://backend:8000
+특이사항:
+  - ...
+```
+
+> Claude가 이 정보를 받아 docker-compose.yml의 frontend 서비스를 활성화합니다.
 
 ---
 
@@ -63,13 +113,11 @@ response = requests.post(
 
 **현황**: 부분 구현됨. 직업 공개·승패 표시 미완성.
 
-**목표**: `game_over` WebSocket 이벤트 payload 기준으로 완성.
-
 **game_over payload 구조**:
 ```python
 {
     "winner": "citizen" | "mafia" | "jester",
-    "reason": str,           # 승리 이유 문자열
+    "reason": str,
     "players": [
         {
             "name": str,
@@ -91,30 +139,30 @@ def draw_result():
     reason = game_state.get("reason", "")
     players = game_state.get("players", [])
 
-    # 1. 승리 팀 강조 표시
-    winner_text = {"citizen": "🏆 시민 진영 승리!", "mafia": "💀 마피아 승리!", "jester": "🎭 광대 단독 승리!"}
+    winner_text = {
+        "citizen": "🏆 시민 진영 승리!",
+        "mafia": "💀 마피아 승리!",
+        "jester": "🎭 광대 단독 승리!"
+    }
     st.title(winner_text.get(winner, "게임 종료!"))
     st.caption(reason)
     st.divider()
 
-    # 2. 전체 직업 공개 테이블
     st.subheader("최종 직업 공개")
     for p in players:
         status = "✅ 생존" if p.get("is_alive") else f"💀 {p.get('death_round', '?')}라운드 사망"
         cause = p.get("death_cause", "")
-        if cause == "vote":
-            cause_text = "(투표 처형)"
-        elif cause == "mafia":
-            cause_text = "(마피아 공격)"
-        else:
-            cause_text = ""
+        cause_text = {"vote": "(투표 처형)", "mafia": "(마피아 공격)"}.get(cause, "")
         st.write(f"**{p['name']}** — {p.get('role', '?')} | {status} {cause_text}")
 
     st.divider()
-    # 3. 버튼
     col1, col2 = st.columns(2)
     with col1:
         if st.button("다시 하기"):
+            st.session_state.page = "lobby"
+            st.rerun()
+    with col2:
+        if st.button("로비로 돌아가기"):
             st.session_state.page = "lobby"
             st.rerun()
 ```
@@ -129,33 +177,23 @@ def draw_result():
 
 **현황**: 기본 낮/밤 클래스 있으나 완성도 확인 필요.
 
-**목표**: Phase에 따라 배경색 + 텍스트 색 자동 전환.
-
 **색상 팔레트** (`UI_DESIGN.md` §7 기준):
 ```css
 /* 낮 테마 */
-.day-theme {
-    background-color: #FFF8E1;
-}
+.day-theme { background-color: #FFF8E1; }
 
 /* 밤 테마 */
-.night-theme {
-    background-color: #1A1A2E;
-    color: #E0E0E0;
-}
+.night-theme { background-color: #1A1A2E; color: #E0E0E0; }
 
-/* 진영별 */
-.mafia-message   { border-left: 3px solid #C0392B; }
-.system-message  { background: #F39C12; border-radius: 4px; padding: 4px 8px; }
-.my-message      { background: #EBF5FB; }
-.other-message   { background: #F2F3F4; }
-.dead-message    { opacity: 0.5; text-decoration: line-through; }
+/* 채팅 스타일 */
+.mafia-message  { border-left: 3px solid #C0392B; background: #FDEDEC; }
+.system-message { background: #F39C12; border-radius: 4px; padding: 4px 8px; color: white; }
+.my-message     { background: #EBF5FB; }
+.other-message  { background: #F2F3F4; }
+.dead-message   { opacity: 0.5; text-decoration: line-through; }
 
 /* 사망 오버레이 */
-.dead-overlay {
-    position: relative;
-    pointer-events: none;
-}
+.dead-overlay { position: relative; pointer-events: none; }
 .dead-overlay::after {
     content: '사망';
     position: absolute;
@@ -165,7 +203,6 @@ def draw_result():
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.2rem;
     border-radius: 4px;
 }
 ```
@@ -192,9 +229,35 @@ def draw_game():
 
 ---
 
-## ✅ 완료 보고 형식
+### [G-8] frontend/Dockerfile 작성
 
-작업 완료 후 Claude에게 아래 형식으로 보고:
+**목표**: 컨테이너 빌드 가능한 Dockerfile 작성 후 Claude에게 보고.
+
+**가이드**: `ROLE_GEMINI.md` §6 frontend/Dockerfile 작성 가이드 참조.
+
+**완성 후 보고**: Claude가 docker-compose.yml frontend 서비스를 활성화합니다.
+
+---
+
+## 📢 인프라 보고 방법
+
+docker-compose.yml 변경이 필요한 사항이 생기면 **직접 수정하지 말고** Claude에게 보고:
+
+```
+[인프라 보고] 항목명
+
+요청 내용:
+  - 새로운 환경변수: FOO=bar
+  - 포트 노출: 8501
+  - 기타: ...
+
+이유:
+  - ...
+```
+
+---
+
+## ✅ 완료 보고 형식
 
 ```
 [완료] G-N — 작업명

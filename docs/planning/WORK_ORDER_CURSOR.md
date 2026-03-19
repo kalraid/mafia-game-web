@@ -1,12 +1,64 @@
 # ⚙️ Cursor 작업 지시서 (WORK_ORDER_CURSOR)
 
 > **대상**: Cursor AI — 백엔드 개발자  
-> **작성자**: Claude AI (기획자 + 인프라)  
+> **작성자**: Claude AI (기획자 + 인프라 엔지니어)  
 > **최초 작성일**: 2026-03-19  
 > **최종 업데이트**: 2026-03-19 (af1a977 반영)
 
 > 작업 전 반드시 `ROLE_CURSOR.md`와 이 문서를 먼저 읽을 것.
-> **docker-compose.yml은 수정하지 않는다** — Claude 담당.
+
+---
+
+## 역할 구분 (필수 숙지)
+
+| 항목 | 담당 | 비고 |
+|------|------|------|
+| `backend/` 소스코드 | ✅ Cursor | |
+| `backend/Dockerfile` | ✅ Cursor | 로컬 개발 및 빌드용 |
+| `requirements.txt` | ✅ Cursor | |
+| `.env.example` (백엔드 항목) | ✅ Cursor | |
+| `docker-compose.yml` | ❌ Claude | **수정 금지** — 필요사항은 보고 |
+| `docs/planning/` | ❌ Claude | **수정 금지** |
+| `frontend/` | ❌ Gemini | |
+
+> **Dockerfile 완성 후 보고**: Claude가 docker-compose.yml에 통합합니다.
+
+---
+
+## backend/Dockerfile 작성 가이드
+
+Dockerfile 작성 완료 또는 변경 후 Claude에게 아래 정보를 보고하세요.
+
+**현재 Dockerfile 구조** (기준):
+```dockerfile
+# backend/Dockerfile (루트 Dockerfile)
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY backend/ ./backend/
+
+EXPOSE ${PORT:-8000}
+
+CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
+```
+
+**Dockerfile 변경 시 보고 형식**:
+```
+[보고] backend/Dockerfile 변경
+
+변경 내용:
+  - ...
+
+노출 포트: 8000
+필요 환경변수 (신규 추가된 것):
+  - ...
+특이사항:
+  - ...
+```
 
 ---
 
@@ -82,9 +134,6 @@ async def broadcast_to_channel(
     channel == 'spy_listen': allowed_player_ids(스파이) + 마피아에게 전송
     """
     ...
-
-# runner.py 또는 engine에서
-# NIGHT_MAFIA phase 진입 시 마피아 player_id 목록을 ws_manager에 전달
 ```
 
 **참조 문서**: `TECH_ARCHITECTURE.md` §3.4 채팅 채널 분리
@@ -95,27 +144,22 @@ async def broadcast_to_channel(
 
 ### [C-5] Redis Checkpointer 연동
 
-**현황**: `graph.py`에 `thread_id` config만 있고 실제 Redis Checkpointer 없음.  
-Agent가 라운드 간 이전 관찰을 기억하지 못함.
+**현황**: `graph.py`에 `thread_id` config만 있고 실제 Redis Checkpointer 없음.
 
-**전제 조건**: `_DayChatState`에서 PlayerAgent 객체를 제거하고 agent_id만 전달하는 구조로 변경 필요 (비직렬화 객체 문제).
+> **Redis 서버**: docker-compose의 redis 서비스 사용.  
+> 로컬 개발 시 `docker-compose up redis` 실행 후 진행.
+
+**전제 조건**: `_DayChatState`에서 PlayerAgent 객체를 제거하고 agent_id만 전달하는 구조로 변경 필요.
 
 **구체적 작업**:
 ```python
 from langgraph.checkpoint.redis import RedisSaver
 import redis
 
-# graph.py __init__
 redis_client = redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379"))
 checkpointer = RedisSaver(redis_client)
 self._agent_call_graph = day_chat_graph.compile(checkpointer=checkpointer)
-
-# 각 Agent 호출 시
-config = {"configurable": {"thread_id": f"{game_id}_{agent_id}"}}
-await self._agent_call_graph.ainvoke(state, config=config)
 ```
-
-> Redis 서버는 `docker-compose up redis`로 실행 (Claude가 docker-compose 관리).
 
 **참조 문서**: `RAG_AND_STORAGE_DESIGN.md` §4 Redis 키 설계
 
@@ -128,8 +172,6 @@ await self._agent_call_graph.ainvoke(state, config=config)
 **구체적 작업**:
 ```python
 def detective_investigate(ctx: RoleAbilityContext) -> GameState:
-    # 대상의 team(mafia 여부) 확인 → 경찰 Agent 메모리에 기록
-    # ctx.game_state.reports에 결과 추가
     if ctx.target:
         result = f"{ctx.target.name}은 {ctx.target.team.value}입니다."
         ctx.game_state.reports.append(Report(
@@ -140,25 +182,41 @@ def detective_investigate(ctx: RoleAbilityContext) -> GameState:
     return ctx.game_state
 
 def doctor_protect(ctx: RoleAbilityContext) -> GameState:
-    # 대상 Player에 protected=True 임시 플래그 추가
-    # mafia_attack 시 protected 체크하여 무효화
     if ctx.target:
         ctx.target.ability_used = True  # protected 플래그로 활용
     return ctx.game_state
 
 def mafia_attack(ctx: RoleAbilityContext) -> GameState:
-    # doctor가 보호 중이 아니면 is_alive = False
-    # player_death 이벤트 GameState.events에 추가
-    if ctx.target and not ctx.target.ability_used:  # ability_used = protected
+    if ctx.target and not ctx.target.ability_used:  # ability_used == protected
         ctx.target.is_alive = False
         ctx.game_state.events.append(GameEvent(
             type="player_death",
-            payload={"player": ctx.target.name, "role": ctx.target.role.value, "cause": "mafia", "round": ctx.game_state.round}
+            payload={"player": ctx.target.name, "role": ctx.target.role.value,
+                     "cause": "mafia", "round": ctx.game_state.round}
         ))
     return ctx.game_state
 ```
 
 **참조 문서**: `GAME_RULES.md` §2 직업 명세
+
+---
+
+## 📢 인프라 보고 방법
+
+docker-compose.yml 변경이 필요한 사항이 생기면 **직접 수정하지 말고** Claude에게 보고:
+
+```
+[인프라 보고] 항목명
+
+요청 내용:
+  - 새로운 환경변수: FOO=bar
+  - 새로운 볼륨 마운트: ./backend/xxx:/app/xxx
+  - 포트 노출 변경: 8001
+  - 기타: ...
+
+이유:
+  - ...
+```
 
 ---
 

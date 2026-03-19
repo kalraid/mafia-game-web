@@ -14,16 +14,17 @@ Streamlit 화면, WebSocket 클라이언트, 사용자 인터랙션을 구현합
 
 [담당 범위]
   - frontend/ 소스코드 전체
-  - frontend/Dockerfile (로컬 개발용, 필요 시)
+  - frontend/Dockerfile (로컬 개발 및 빌드용)
 
 [비담당 범위]
   - docker-compose.yml → Claude 담당 (직접 수정 금지)
+    ※ frontend/Dockerfile 완성 후 Claude에게 보고 → Claude가 compose에 통합
   - backend/ → Cursor 담당
   - docs/planning/ → Claude 담당 (직접 수정 금지)
 
 [주의사항]
   - 파일 내용 수정 시 PowerShell/shell 명령어 사용 금지
-  - 문서 파일은 직접 작업 및 수정 금지
+  - 문서 파일(docs/) 직접 작업 및 수정 금지
 ```
 
 ---
@@ -43,6 +44,7 @@ Streamlit 화면, WebSocket 클라이언트, 사용자 인터랙션을 구현합
 | **게임 종료 화면** | 승패 결과, 직업 공개 |
 | **CSS/스타일링** | 낮/밤 테마, 색상 팔레트 |
 | **프론트 테스트** | `frontend/tests/` 단위·E2E 테스트 |
+| **frontend/Dockerfile** | 로컬 개발 및 빌드용 Dockerfile 작성 |
 
 ---
 
@@ -54,6 +56,7 @@ Streamlit 화면, WebSocket 클라이언트, 사용자 인터랙션을 구현합
 4. **docker-compose.yml은 수정하지 않는다** — Claude 담당, 필요 사항은 보고
 5. **docs/ 문서는 수정하지 않는다** — Claude 담당
 6. **백엔드(Cursor) 작업에 관여하지 않는다** — API 스펙 변경 요청은 Claude를 통해
+7. **frontend/Dockerfile 완성 후 Claude에게 보고** — Claude가 docker-compose.yml에 통합
 
 ---
 
@@ -75,6 +78,7 @@ Streamlit 화면, WebSocket 클라이언트, 사용자 인터랙션을 구현합
 frontend/                   ✅ 전담
 ├── app.py
 ├── utils.py
+├── Dockerfile              ✅ 전담 (로컬 빌드용, 완성 후 Claude에게 보고)
 ├── pages/
 │   ├── lobby.py
 │   ├── game.py
@@ -88,14 +92,49 @@ frontend/                   ✅ 전담
     ├── e2e/
     └── pytest/
 
-docker-compose.yml          ❌ Claude 담당 (수정 금지)
+docker-compose.yml          ❌ Claude 담당 (수정 금지, 필요사항 보고만)
 docs/planning/              ❌ Claude 담당 (수정 금지)
 backend/                    ❌ Cursor 담당
 ```
 
 ---
 
-## 6. 화면 레이아웃 요약
+## 6. frontend/Dockerfile 작성 가이드
+
+Dockerfile 작성 완료 후 Claude에게 아래 정보를 보고하면 Claude가 docker-compose.yml에 통합합니다.
+
+**예시 구조**:
+```dockerfile
+# frontend/Dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+EXPOSE 8501
+
+CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+```
+
+**보고 형식**:
+```
+[보고] frontend/Dockerfile 완성
+
+노출 포트: 8501
+필요 환경변수:
+  - BACKEND_URL (백엔드 API URL)
+  - WS_URL (WebSocket URL)
+특이사항:
+  - ...
+```
+
+---
+
+## 7. 화면 레이아웃 요약
 
 ```
 ┌──────────────────────────────────────┬──────────────┐
@@ -112,7 +151,7 @@ backend/                    ❌ Cursor 담당
 
 ---
 
-## 7. WebSocket/REST 이벤트 처리
+## 8. WebSocket/REST 이벤트 처리
 
 ### 수신 (서버 → 클라이언트, WebSocket)
 | 이벤트 | UI 처리 내용 |
@@ -134,7 +173,7 @@ backend/                    ❌ Cursor 담당
 
 ---
 
-## 8. 색상 팔레트 (CSS 변수)
+## 9. 색상 팔레트 (CSS 변수)
 
 ```css
 /* 낮 테마 */   --bg-day: #FFF8E1;    --accent-day: #F39C12;
@@ -146,7 +185,7 @@ backend/                    ❌ Cursor 담당
 
 ---
 
-## 9. Phase별 버튼 상태
+## 10. Phase별 버튼 상태
 
 | Phase | 활성 버튼 | 비활성 요소 |
 |-------|----------|------------|
@@ -160,7 +199,7 @@ backend/                    ❌ Cursor 담당
 
 ---
 
-## 10. 작업 시작 체크리스트
+## 11. 작업 시작 체크리스트
 
 - [ ] `WORK_ORDER_GEMINI.md` 최신본 확인 (현재 지시 사항)
 - [ ] `UI_DESIGN.md` 최신본 확인
@@ -170,7 +209,7 @@ backend/                    ❌ Cursor 담당
 
 ---
 
-## 11. 완료 보고 형식
+## 12. 완료 보고 형식
 
 작업 완료 후 Claude에게 아래 형식으로 보고:
 
