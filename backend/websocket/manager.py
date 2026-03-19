@@ -5,11 +5,18 @@ from typing import Dict, Set
 
 from fastapi import WebSocket
 
-from backend.websocket.events import ClientToServerEvent, ServerToClientEvent
+from backend.game.registry import GameRegistry
+from backend.websocket.events import (
+    ClientToServerEvent,
+    ServerToClientEvent,
+    VotePayload,
+    UseAbilityPayload,
+)
 
 
 class ConnectionManager:
-    def __init__(self) -> None:
+    def __init__(self, registry: GameRegistry) -> None:
+        self.registry = registry
         self._connections: Dict[str, Set[WebSocket]] = {}
 
     async def connect(self, game_id: str, websocket: WebSocket) -> None:
@@ -36,7 +43,6 @@ class ConnectionManager:
         raw_text: str,
     ) -> None:
         event = ClientToServerEvent.model_validate_json(raw_text)
-        # Phase 3에서는 단순 echo 형태로 chat_message만 브로드캐스트
         if event.event == "chat_message":
             payload = event.payload
             await self.broadcast(
@@ -49,6 +55,39 @@ class ConnectionManager:
                         "channel": "global",
                         "timestamp": None,
                         "is_ai": False,
+                    },
+                ),
+            )
+        elif event.event == "vote":
+            game = self.registry.get_or_create(game_id)
+            payload = VotePayload.model_validate(event.payload)
+            # voter_id는 프론트 계약에 없어서, 일단 sender로부터 추정(미포함 시 "unknown")
+            voter_id = event.payload.get("sender", "unknown") if isinstance(event.payload, dict) else "unknown"
+            game.submit_vote(voter_id=voter_id, target_id=payload.target)
+            await self.broadcast(
+                game_id,
+                ServerToClientEvent(
+                    event="vote_result",
+                    payload={
+                        "target": payload.target,
+                        "votes": game.get_vote_snapshot(),
+                        "executed": False,
+                    },
+                ),
+            )
+        elif event.event == "use_ability":
+            game = self.registry.get_or_create(game_id)
+            payload = UseAbilityPayload.model_validate(event.payload)
+            agent_id = event.payload.get("sender", "unknown") if isinstance(event.payload, dict) else "unknown"
+            game.submit_ability(agent_id=agent_id, ability=payload.ability, target_id=payload.target)
+            await self.broadcast(
+                game_id,
+                ServerToClientEvent(
+                    event="ability_result",
+                    payload={
+                        "type": payload.ability,
+                        "success": True,
+                        "detail": {"target": payload.target},
                     },
                 ),
             )

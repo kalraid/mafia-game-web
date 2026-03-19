@@ -4,11 +4,13 @@ import os
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
+from backend.game.registry import GameRegistry
 from backend.websocket.manager import ConnectionManager
 
 
 app = FastAPI(title="AI Mafia Backend")
-ws_manager = ConnectionManager()
+registry = GameRegistry()
+ws_manager = ConnectionManager(registry=registry)
 
 
 @app.get("/health")
