@@ -1,9 +1,9 @@
 # 기술 아키텍처 명세서 (TECH_ARCHITECTURE)
 
-> **문서 버전**: v1.1  
+> **문서 버전**: v1.2  
 > **최초 작성일**: 2026-03-18  
-> **최종 업데이트**: 2026-03-18  
-> **변경 내용**: Redis 필수로 변경 (선택→필수), 메모리 계층 구조 추가
+> **최종 업데이트**: 2026-03-19  
+> **변경 내용**: 투표/능력 통신 방식 WebSocket → REST 변경 기록, 구현 현황 반영
 
 ---
 
@@ -13,46 +13,44 @@
 ┌─────────────────────────────────────────────────────┐
 │                   Client Layer                       │
 │              Streamlit (Browser UI)                  │
-│         WebSocket Client (ws://localhost)            │
-└──────────────────────┬──────────────────────────────┘
-                       │ WebSocket / HTTP
-┌──────────────────────▼──────────────────────────────┐
+│   WebSocket (이벤트 수신)  +  HTTP REST (액션 전송)   │
+└──────────────────┬───────────────────┬──────────────┘
+                   │ WebSocket         │ HTTP POST
+┌──────────────────▼───────────────────▼──────────────┐
 │              FastAPI Main Server                     │
 │                                                      │
-│  ┌──────────────┐  ┌──────────────┐                 │
-│  │ WebSocket    │  │ REST API     │                 │
-│  │ Manager      │  │ (게임 설정,  │                 │
-│  │              │  │  로비 등)    │                 │
-│  └──────┬───────┘  └──────────────┘                 │
+│  ┌──────────────┐  ┌───────────────────────────┐    │
+│  │ WebSocket    │  │ REST API                  │    │
+│  │ Manager      │  │ POST /game/{id}/chat      │    │
+│  │ (이벤트 Push)│  │ POST /game/{id}/vote      │    │
+│  │              │  │ POST /game/{id}/ability   │    │
+│  └──────┬───────┘  └───────────────────────────┘    │
 │         │                                            │
 │  ┌──────▼──────────────────────────────────────┐    │
-│  │         Game Engine (게임 진행 로직)          │    │
-│  │   Phase Manager / Timer / Vote Manager       │    │
+│  │         Game Engine + GameRunner             │    │
+│  │   Phase / Timer / Vote / Ability / Snapshot  │    │
 │  └──────┬──────────────────────────────────────┘    │
 │         │                                            │
 │  ┌──────▼──────────────────────────────────────┐    │
-│  │      LangGraph Orchestrator                  │    │
-│  │  (Agent 실행 및 슈퍼바이저 조율)              │    │
+│  │      LangGraph Orchestrator (AgentGraph)     │    │
+│  │  StateGraph + Node/Edge + 슈퍼바이저 조율     │    │
 │  └──────┬──────────────────────────────────────┘    │
 │         │                                            │
 │  ┌──────▼──────────────────────────────────────┐    │
 │  │      AI Agent Pool (최대 19개)               │    │
-│  │  Agent_1 ... Agent_N (각각 LangGraph Node)   │    │
+│  │  Agent_1 ... Agent_N (LangGraph Node)        │    │
 │  └──────┬──────────────────────────────────────┘    │
 └─────────┼────────────────────────────────────────────┘
           │
 ┌─────────▼──────────────────────────────────────────┐
 │              공유 저장소 레이어                       │
-│                                                      │
 │  ┌─────────────────────┐  ┌────────────────────┐   │
 │  │  Redis (필수)        │  │ ChromaDB (RAG)     │   │
 │  │  - 게임 세션 상태    │  │ - 전략 지식베이스  │   │
-│  │  - 채팅 히스토리     │  │ - 발언 패턴        │   │
-│  │  - Agent 메모리      │  │ - 상황별 사례      │   │
-│  │  - LangGraph         │  │ - 룰 문서          │   │
-│  │    Checkpointer      │  └────────────────────┘   │
-│  │  - Supervisor        │                            │
-│  │    Directive         │                            │
+│  │  - LangGraph         │  │ - 발언 패턴        │   │
+│  │    Checkpointer      │  │ - 상황별 사례      │   │
+│  │  - Supervisor        │  │ - 룰 문서          │   │
+│  │    Directive         │  └────────────────────┘   │
 │  └─────────────────────┘                            │
 └─────────────────────────────────────────────────────┘
 ```
@@ -63,48 +61,68 @@
 
 ### 2.1 기본: 단일 FastAPI 서버
 ```
-fastapi_main/
-├── main.py              # FastAPI 앱 진입점
+backend/
+├── main.py              # FastAPI 앱 + REST API + WebSocket
 ├── websocket/           # WebSocket 연결 관리
-├── game/                # 게임 엔진 (Phase, Timer, Vote)
-├── agents/              # LangGraph Agent 풀
-├── supervisors/         # 슈퍼바이저 Agent
-├── rag/                 # RAG 지식베이스
-├── mcp/                 # MCP Tool 정의
-└── models/              # 데이터 모델 (Pydantic)
+├── game/                # engine, runner, registry, snapshot, vote, roles, phase, timer, win_condition
+├── agents/              # LangGraph AgentGraph, PlayerAgent, AgentPool, persona
+├── supervisors/         # citizen, mafia, neutral
+├── rag/                 # store, retriever, knowledge/
+├── mcp/                 # tools, server
+└── models/              # game, chat, directive
 ```
-
-### 2.2 확장: 서비스 분리 (부하 고려 시)
-```
-[서버 A] FastAPI Main    → 게임 엔진 + WebSocket 관리
-[서버 B] Agent Worker 1  → Agent 1~6 (시민 계열)
-[서버 C] Agent Worker 2  → Agent 7~13 (마피아+중립)
-[서버 D] RAG Server      → ChromaDB + 임베딩 서비스
-```
-> 초기 개발은 단일 서버로 시작하고 성능 테스트 후 분리 여부 결정.
 
 ---
 
-## 3. WebSocket 통신 설계
+## 3. 통신 설계
 
-### 3.1 이벤트 타입 정의
+### 3.1 통신 방식 구분
 
-```json
-// 클라이언트 → 서버
-{ "event": "chat_message", "payload": { "content": "나는 시민이야!", "sender": "player" } }
-{ "event": "vote", "payload": { "target": "AI_Player_3" } }
-{ "event": "use_ability", "payload": { "target": "AI_Player_5", "ability": "investigate" } }
+> ⚠️ **설계 변경 기록 (2026-03-19)**  
+> 초기 설계: 투표·능력 사용을 WebSocket 이벤트로 처리  
+> **실제 구현**: 프론트엔드가 투표·능력을 **HTTP REST POST**로 구현  
+> → 채팅은 WebSocket, 액션(투표·능력)은 REST로 혼용하는 방식으로 확정
 
-// 서버 → 클라이언트
-{ "event": "chat_broadcast", "payload": { "sender": "AI_Player_2", "content": "...", "timestamp": "...", "is_ai": true } }
-{ "event": "phase_change", "payload": { "phase": "night", "round": 2 } }
-{ "event": "player_death", "payload": { "player": "AI_Player_7", "role": "mafia", "cause": "vote" } }
-{ "event": "game_state_update", "payload": { "players": [...], "phase": "day", "timer": 120 } }
-{ "event": "vote_result", "payload": { "target": "AI_Player_3", "votes": 4, "executed": true } }
-{ "event": "game_over", "payload": { "winner": "citizen", "reason": "all_mafia_eliminated" } }
+| 통신 방향 | 방식 | 대상 |
+|----------|------|------|
+| 서버 → 클라이언트 | **WebSocket** | 이벤트 Push (채팅, 상태 변경, 사망 등) |
+| 클라이언트 → 서버 (채팅) | **WebSocket** | chat_message |
+| 클라이언트 → 서버 (투표) | **HTTP REST** | POST /game/{id}/vote |
+| 클라이언트 → 서버 (능력) | **HTTP REST** | POST /game/{id}/ability |
+
+### 3.2 REST API 스펙
+
+```
+POST /game/{game_id}/chat
+  Body: { sender: str, content: str, channel: str = "global" }
+  Response: { status: "ok" }
+
+POST /game/{game_id}/vote
+  Body: { voter: str, voted_for: str | None }
+  Response: { status: "ok" }
+
+POST /game/{game_id}/ability
+  Body: { player_name: str, ability: str, target: str }
+  Note: "protect" → 서버 내부에서 "heal"로 자동 매핑
+  Response: { status: "ok" }
+
+GET /health
+  Response: { status: "ok" }
 ```
 
-### 3.2 채팅 채널 분리
+### 3.3 WebSocket 이벤트 (서버 → 클라이언트)
+
+```json
+{ "event": "chat_broadcast",    "payload": { "sender", "content", "channel", "timestamp", "is_ai" } }
+{ "event": "phase_change",      "payload": { "phase", "round" } }
+{ "event": "game_state_update", "payload": { "players", "phase", "round", "timer_seconds" } }
+{ "event": "player_death",      "payload": { "player", "role"(한글), "cause" } }
+{ "event": "vote_result",       "payload": { "target", "votes", "executed" } }
+{ "event": "ability_result",    "payload": { "type", "success", "detail" } }
+{ "event": "game_over",         "payload": { "winner", "reason", "players" } }
+```
+
+### 3.4 채팅 채널 분리
 
 | 채널 | 접근 권한 | 사용 시점 |
 |------|----------|----------|
@@ -121,15 +139,16 @@ fastapi_main/
 ```python
 class GameState(BaseModel):
     game_id: str
-    phase: Literal["day", "night", "vote", "ability"]
+    phase: Phase          # Enum: day_chat, day_vote, final_speech, final_vote,
+                          #       night_mafia, night_ability, night_result
     round: int
     timer_seconds: int
     players: List[Player]
     chat_history: List[ChatMessage]
     events: List[GameEvent]
-    directives: List[Directive]      # 슈퍼바이저 → Agent 지시
-    reports: List[Report]            # Agent → 슈퍼바이저 보고
-    winner: Optional[str]
+    directives: List[Directive]   # 슈퍼바이저 → Agent 지시
+    reports: List[Report]         # Agent → 슈퍼바이저 보고
+    winner: Optional[str]         # "citizen" | "mafia" | "jester" | "spy"
 ```
 
 ### 4.2 플레이어 (Player)
@@ -137,12 +156,12 @@ class GameState(BaseModel):
 class Player(BaseModel):
     id: str
     name: str
-    role: Role           # citizen, detective, doctor, fortune_teller,
-                         # mafia, killer, jester, spy
-    team: Team           # citizen, mafia, neutral
+    role: Role            # citizen, detective, doctor, fortune_teller,
+                          # mafia, killer, jester, spy
+    team: Team            # citizen, mafia, neutral
     is_alive: bool
     is_human: bool
-    trust_score: float   # 0.0 ~ 1.0 (AI 내부 신뢰도)
+    trust_score: float    # 0.0 ~ 1.0 (슈퍼바이저 전략 기반)
     ability_used: bool
 ```
 
@@ -152,7 +171,7 @@ class ChatMessage(BaseModel):
     id: str
     sender: str
     content: str
-    channel: str         # "global" | "mafia_secret" | "system"
+    channel: str          # "global" | "mafia_secret" | "system"
     timestamp: datetime
     is_ai: bool
 ```
@@ -164,25 +183,20 @@ class ChatMessage(BaseModel):
 ```
 ┌─────────────────────────────────────────────────────┐
 │  L1. Agent 실행 컨텍스트 (In-Memory, 단일 호출)      │
-│      현재 호출에 필요한 정보만 로드                   │
-│      game_state 스냅샷, 최근 채팅 10개, directive    │
+│      game_state 스냅샷, 최근 채팅, directive, RAG 결과│
 ├─────────────────────────────────────────────────────┤
-│  L2. 게임 세션 메모리 (Redis, 게임 종료까지 유지)    │
-│      전체 채팅 히스토리, 이벤트 로그, trust_score    │
-│      LangGraph Checkpointer로 연동                   │
+│  L2. 게임 세션 메모리 (Redis)                        │
+│      LangGraph Checkpointer (thread_id 기반)         │
 │      thread_id = f"{game_id}_{agent_id}"            │
 ├─────────────────────────────────────────────────────┤
-│  L3. 전략 지식베이스 (ChromaDB, 영구 유지)           │
+│  L3. 전략 지식베이스 (ChromaDB, 영구)                │
 │      전략 문서, 발언 패턴, 상황별 사례, 룰 문서      │
-│      게임 간 공유, 의미 기반 검색                    │
 └─────────────────────────────────────────────────────┘
 ```
 
 ### Redis 키 설계
 ```
 game:{game_id}:state              → 전체 게임 상태 JSON
-game:{game_id}:prologue           → 게임 시작 설정 (인원, 직업 배분)
-game:{game_id}:players            → 플레이어별 정보
 game:{game_id}:chat:{round}       → 라운드별 채팅 히스토리
 game:{game_id}:events             → 게임 이벤트 로그
 game:{game_id}:directives         → 슈퍼바이저 → Agent 지시
@@ -191,42 +205,39 @@ agent:{game_id}:{agent_id}:memory → Agent 개인 관찰 메모리
 
 ---
 
-## 6. Phase 타이머 관리
+## 6. Phase 타이머
 
 ```
 DAY_CHAT      → 180초 (3분)
-DAY_VOTE      → 60초  (1분)
-FINAL_SPEECH  → 30초  (최후 변론)
-FINAL_VOTE    → 30초  (찬반 투표)
-NIGHT_MAFIA   → 90초  (마피아 협의)
-NIGHT_ABILITY → 60초  (직업 능력)
-NIGHT_RESULT  → 10초  (결과 공개 대기)
+DAY_VOTE      → 60초
+FINAL_SPEECH  → 30초 (최후 변론)
+FINAL_VOTE    → 30초 (찬반 투표)
+NIGHT_MAFIA   → 90초 (마피아 협의)
+NIGHT_ABILITY → 60초 (직업 능력)
+NIGHT_RESULT  → 10초 (결과 공개 대기)
 ```
 
-각 Phase는 서버 측 asyncio 타이머로 관리.  
-타이머 종료 시 자동으로 다음 Phase 전환 이벤트 발생.
+GameRunner.run() 내부 asyncio.sleep()으로 타이머 관리.  
+프론트는 JS interval로 독립적으로 카운트다운 표시.
 
 ---
 
-## 7. 기술 의존성 정리
+## 7. 기술 의존성
 
 ```
 Python               >= 3.11
 FastAPI              >= 0.110
-uvicorn              (ASGI 서버)
-websockets           (WebSocket 지원)
+uvicorn
+websockets
 streamlit            >= 1.32
 langchain            >= 0.2
 langgraph            >= 0.1
 langchain-anthropic
-chromadb             (RAG 벡터 DB)
-sentence-transformers (임베딩)
+chromadb
+sentence-transformers
 pydantic             >= 2.0
-asyncio              (비동기 처리)
-redis                ✅ 필수 (LangGraph Checkpointer + 세션 저장)
-langgraph-checkpoint-redis  (LangGraph Redis 연동)
+redis                ✅ 필수
+langgraph-checkpoint-redis
 ```
 
-> ⚠️ **Redis는 필수**입니다. 단일 서버 구성에서도 LangGraph Checkpointer와
-> Agent 멀티턴 메모리를 위해 반드시 실행되어야 합니다.
-> `docker-compose.yml`에 Redis 서비스를 포함해야 합니다.
+> ⚠️ Redis는 필수입니다. docker-compose.yml에 Redis 서비스가 포함되어야 합니다.
