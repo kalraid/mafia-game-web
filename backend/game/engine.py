@@ -94,6 +94,12 @@ class GameEngine:
                     if handler is not None:
                         handler(RoleAbilityContext(game_state=self.state, actor=actor, target=target))
 
+                # spy_listen: spy가 밤 마피아 채팅을 도청(요약)한다.
+                if ability == "spy_listen":
+                    handler = ROLE_ABILITIES.get(actor.role)
+                    if handler is not None:
+                        handler(RoleAbilityContext(game_state=self.state, actor=actor, target=target))
+
             # 2) 공격은 최종 1명 처치 (MVP: 첫 번째 attack 요청만 적용)
             first_attack: tuple[str, dict] | None = None
             for actor_id, req in self.ability_requests.items():

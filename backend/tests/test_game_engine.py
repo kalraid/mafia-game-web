@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from backend.game.engine import GameEngine
 from backend.game.vote import tally_votes
 from backend.game.phase import get_phase_duration
 from backend.game.win_condition import check_winner
+from backend.models.chat import ChatMessage
 from backend.models.game import GameEvent, GameState, Phase, Player, Role, Team
 
 
@@ -191,6 +194,52 @@ def test_engine_night_ability_detective_investigate_writes_report() -> None:
     engine.advance_phase()
 
     assert any("Mafia1" in r.content and "mafia" in r.content.lower() for r in state.reports)
+
+
+def test_engine_night_ability_fortune_teller_investigate_writes_report() -> None:
+    state = GameState(
+        game_id="g7ca",
+        phase=Phase.NIGHT_ABILITY,
+        round=2,
+        timer_seconds=60,
+        players=[
+            Player(id="ft", name="Fortune", role=Role.FORTUNE_TELLER, team=Team.CITIZEN, is_alive=True),
+            Player(id="m1", name="Mafia1", role=Role.MAFIA, team=Team.MAFIA, is_alive=True),
+        ],
+    )
+    engine = GameEngine(state)
+    engine.submit_ability(agent_id="ft", ability="investigate", target_id="m1")
+    engine.advance_phase()
+
+    assert any("Mafia1" in r.content and "mafia" in r.content.lower() for r in state.reports)
+
+
+def test_engine_night_ability_spy_listen_records_report() -> None:
+    state = GameState(
+        game_id="g7cb",
+        phase=Phase.NIGHT_ABILITY,
+        round=2,
+        timer_seconds=60,
+        players=[
+            Player(id="s1", name="Spy", role=Role.SPY, team=Team.NEUTRAL, is_alive=True),
+            Player(id="m1", name="Mafia1", role=Role.MAFIA, team=Team.MAFIA, is_alive=True),
+        ],
+        chat_history=[
+            ChatMessage(
+                id="chat_1",
+                sender="m1",
+                content="secret hello",
+                channel="mafia_secret",
+                timestamp=datetime.utcnow(),
+                is_ai=True,
+            )
+        ],
+    )
+    engine = GameEngine(state)
+    engine.submit_ability(agent_id="s1", ability="spy_listen", target_id="m1")
+    engine.advance_phase()
+
+    assert any("[스파이 도청]" in r.content and "secret hello" in r.content for r in state.reports)
 
 
 def test_check_winner_does_not_declare_jester_when_jester_dies_at_night() -> None:
