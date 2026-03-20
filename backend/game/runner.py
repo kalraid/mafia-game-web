@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from typing import Any, Dict, Optional
 
 from backend.agents.graph import AgentGraph
@@ -78,6 +79,12 @@ class GameRunner:
 
             if self.engine.state.winner is not None:
                 await self._broadcast_game_over()
+                # 게임 종료 후 인사이트 파이프라인은 UI 응답을 막지 않도록 백그라운드로 실행한다.
+                try:
+                    asyncio.create_task(self._run_game_insight_pipeline())
+                except Exception:
+                    # 루프 종료 등으로 create_task가 실패해도 게임 종료 응답은 이미 전송됨.
+                    pass
                 return
 
     async def _run_agents_for_current_phase(self) -> None:
@@ -195,4 +202,45 @@ class GameRunner:
                 },
             ),
         )
+
+    async def _run_game_insight_pipeline(self) -> None:
+        """
+        C-10-3: 게임 종료 후 Redis archive -> (선택) GameInsightAgent 분석 -> RAGStore 런타임 업데이트.
+        """
+        try:
+            import redis  # type: ignore
+        except Exception:
+            return
+
+        try:
+            redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+            redis_client = redis.from_url(redis_url)
+
+            # 1) archive (항상 시도)
+            from backend.game.archiver import GameArchiver
+
+            GameArchiver(redis_client=redis_client).archive(self.engine.state)
+
+            # 2) analyze (LLM 활성일 때만)
+            use_llm_flag = os.getenv("MAFIA_USE_LLM", "1").strip().lower()
+            llm_disabled = os.getenv("CI") is not None or use_llm_flag in {"0", "false", "no"}
+            api_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
+            if llm_disabled or not api_key:
+                return
+
+            from backend.agents.analysis_agent import GameInsightAgent
+            from backend.rag.store import RAGStore
+
+            persist_dir = os.getenv("CHROMA_PERSIST_DIR", "./backend/rag/chroma_db")
+            embedding_model = os.getenv(
+                "EMBEDDING_MODEL",
+                "sentence-transformers/paraphrase-multilingual-mpnet-base-v2",
+            )
+            rag_store = RAGStore(persist_dir=persist_dir, embedding_model=embedding_model)
+
+            insight_agent = GameInsightAgent(redis_client=redis_client, rag_store=rag_store)
+            await insight_agent.analyze_game(self.game_id)
+        except Exception:
+            # 인사이트 파이프라인 실패는 게임 종료 흐름을 방해하지 않도록 무시
+            return
 
