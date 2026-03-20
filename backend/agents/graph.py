@@ -69,22 +69,34 @@ class AgentGraph:
         self._agent_call_graph = self._compile_agent_graph(day_chat_graph)
 
     def _compile_agent_graph(self, graph: StateGraph) -> object:
-        if os.getenv("MAFIA_USE_REDIS_CHECKPOINTER", "0").strip().lower() not in {"1", "true", "yes"}:
+        use_redis = os.getenv("MAFIA_USE_REDIS_CHECKPOINTER", "0").strip().lower()
+        if use_redis not in {"1", "true", "yes"}:
             return graph.compile()
 
-        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
-        try:
-            import redis
-            from langgraph.checkpoint.redis import RedisSaver
+        # C-5: 폴백 제거. Redis 체크포인트 활성화 시 실패는 로깅 후 에러 전파.
+        import logging
 
-            redis_client = redis.from_url(redis_url, socket_connect_timeout=1, socket_timeout=1)
+        logger = logging.getLogger("mafia.backend")
+        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+
+        import redis
+        from langgraph.checkpoint.redis import RedisSaver
+
+        try:
+            redis_client = redis.from_url(
+                redis_url,
+                socket_connect_timeout=1,
+                socket_timeout=1,
+                decode_responses=False,
+            )
             checkpointer = RedisSaver(redis_client)
             setup_fn = getattr(checkpointer, "setup", None)
             if callable(setup_fn):
                 setup_fn()
             return graph.compile(checkpointer=checkpointer)
-        except Exception:
-            return graph.compile()
+        except Exception as e:
+            logger.exception("Redis Checkpointer compile/setup 실패: %s", e)
+            raise
 
     def _issue_directives_for_phase(self, state: GameState) -> None:
         """

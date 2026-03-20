@@ -2,7 +2,7 @@
 
 > **대상**: Cursor AI — 백엔드 개발자
 > **작성자**: Claude AI (기획자 + 인프라)
-> **최종 업데이트**: 2026-03-20 (우선순위 재정리 + C-8 신규 추가)
+> **최종 업데이트**: 2026-03-20 (C-10 GameInsightAgent 신규 추가)
 
 > 작업 전 반드시 `ROLE_CURSOR.md`와 이 문서를 먼저 읽을 것.  
 > **docker-compose.yml은 수정하지 않는다** — Claude 담당.
@@ -193,6 +193,189 @@ def index_knowledge_base(knowledge_dir: str = "docs/rag_knowledge"):
 **검색 필터 연동**: `RAG_AND_STORAGE_DESIGN.md` §3.2 메타데이터 필터 설계 참조.
 
 **참조**: `docs/rag_knowledge/` 전체, `RAG_AND_STORAGE_DESIGN.md` §3, `AGENT_DESIGN.md` §5
+
+---
+
+### [C-10] GameInsightAgent — 게임 결과 분석 → RAG 자동 업데이트 (신규)
+
+**배경**: 현재 RAG 지식베이스는 정적 `.md` 파일 20개로만 구성됨.
+게임이 진행될수록 실전 전략·발언·투표 패턴을 자동 학습해 Agent 품질을 지속 향상시키는 파이프라인이 필요.
+
+**데이터 파이프라인**:
+```
+GameEngine (GameState) → [게임 종료 hook]
+  → Redis mafia:game_archive:{game_id}  (TTL 30일)
+  → GameInsightAgent (LangGraph ReAct)
+  → RAGStore.add_documents(source="runtime")
+  → ChromaDB  ai_mafia_knowledge 컬렉션
+```
+
+---
+
+#### 8-1: `backend/game/archiver.py` — 신규 생성
+
+```python
+import json
+import redis
+from backend.game.state import GameState  # 실제 임포트 경로 확인
+
+class GameArchiver:
+    def __init__(self, redis_client: redis.Redis):
+        self.redis = redis_client
+
+    def archive(self, state: GameState) -> None:
+        """게임 종료 시 GameState를 Redis에 JSON으로 저장 (TTL 30일)"""
+        key = f"mafia:game_archive:{state.game_id}"
+        self.redis.setex(key, 60 * 60 * 24 * 30, state.model_dump_json())
+```
+
+---
+
+#### 8-2: `backend/agents/analysis_agent.py` — 신규 생성
+
+**StateGraph 구조**:
+```
+[load_pending] → [analyze] ──(tool_calls 루프)──→ [write_rag] → [mark_done] → END
+```
+
+**상태 스키마**:
+```python
+from typing import TypedDict, List, Optional
+from langchain_core.messages import BaseMessage
+
+class _InsightState(TypedDict):
+    pending_game_ids: List[str]     # 미분석 game_id 목록
+    current_game: Optional[dict]    # 현재 분석 중인 GameState JSON
+    generated_docs: List[dict]      # 생성된 RAG 문서 버퍼
+    messages: List[BaseMessage]     # LLM 메시지 히스토리 (ReAct)
+```
+
+**bind_tools 도구 3개**:
+```python
+from langchain_core.tools import tool
+
+@tool
+def read_game_record(game_id: str) -> str:
+    """Redis에서 완료된 게임 기록을 읽는다."""
+    key = f"mafia:game_archive:{game_id}"
+    data = redis_client.get(key)
+    return data.decode() if data else "게임 기록 없음"
+
+@tool
+def search_existing_rag(query: str) -> str:
+    """기존 RAG에서 유사 문서를 검색해 중복 생성을 방지한다."""
+    docs = rag_store.similarity_search(query, k=3)
+    return "\n\n".join(d.page_content for d in docs)
+
+@tool
+def write_insight_doc(title: str, category: str, content: str, tags: str) -> str:
+    """분석 결과 문서를 RAGStore에 추가한다.
+    category: strategy | situation | speech_pattern | rule
+    tags: 쉼표 구분 문자열
+    """
+    rag_store.add_documents([{
+        "page_content": content,
+        "metadata": {
+            "title": title,
+            "category": category,
+            "tags": tags,
+            "source": "runtime",
+        }
+    }])
+    return f"문서 추가 완료: {title}"
+```
+
+**with_structured_output 스키마**:
+```python
+from pydantic import BaseModel
+from typing import Literal
+
+class GameInsight(BaseModel):
+    title: str
+    category: Literal["strategy", "situation", "speech_pattern"]
+    content: str          # 마크다운 형식 인사이트 본문
+    tags: List[str]
+    source_game_id: str
+    insight_type: str     # "winning_pattern" | "speech_pattern" | "voting_pattern"
+```
+
+**시스템 프롬프트 핵심**:
+- 게임 채팅 로그, 투표 기록, 생존 플레이어, 승리팀을 분석
+- 승리 팀이 사용한 전략 패턴 추출
+- `search_existing_rag`로 기존 RAG와 중복 여부 확인 후 새 인사이트만 생성
+- 1판당 최대 2~3개 문서 생성
+- 문서 생성 후 `write_insight_doc` 도구 호출
+
+**노드 구현 핵심**:
+```python
+# load_pending 노드
+def load_pending(state: _InsightState) -> _InsightState:
+    """Redis SET에서 미분석 game_id 목록을 로드"""
+    processed = redis_client.smembers("mafia:game_analysis:processed")
+    all_keys = redis_client.keys("mafia:game_archive:*")
+    pending = [
+        k.decode().split(":")[-1] for k in all_keys
+        if k.decode().split(":")[-1].encode() not in processed
+    ]
+    return {**state, "pending_game_ids": pending}
+
+# mark_done 노드
+def mark_done(state: _InsightState) -> _InsightState:
+    """분석 완료된 game_id를 SET에 추가"""
+    if state.get("current_game"):
+        gid = state["current_game"].get("game_id", "")
+        if gid:
+            redis_client.sadd("mafia:game_analysis:processed", gid)
+    return state
+```
+
+---
+
+#### 8-3: `backend/game/runner.py` — 게임 종료 hook 추가
+
+`_check_game_end()` 또는 `run()` 루프 내 승리 조건 확정 직후에 추가:
+
+```python
+# 기존 게임 종료 처리 후
+if self.engine.state.winner is not None:
+    archiver.archive(self.engine.state)                        # Redis 아카이브
+    asyncio.create_task(insight_agent.run())                   # 백그라운드 분석
+```
+
+- `archiver`는 `GameRunner.__init__`에서 `GameArchiver(redis_client)` 로 초기화
+- `insight_agent`는 `GameInsightAgent(redis_client, rag_store)` 로 초기화
+
+---
+
+#### 8-4: `backend/rag/store.py` — `source="runtime"` 메타데이터 구분 (선택)
+
+기존 `add_documents()` 호출 시 메타데이터에 `"source": "runtime"` 이 포함되면 충분.
+별도 메서드 추가 불필요. 필요 시 검색 필터에서 `source` 기준 분리 가능:
+
+```python
+# source=runtime 문서만 검색
+docs = collection.query(where={"source": "runtime"}, ...)
+
+# 정적 지식베이스만 검색
+docs = collection.query(where={"source": "static"}, ...)
+```
+
+기존 지식문서 인덱싱(C-9) 시 `"source": "static"` 메타데이터를 함께 넣어둘 것.
+
+---
+
+**검증 방법**:
+```bash
+# 1. 테스트 게임 아카이브 수동 삽입
+redis-cli set mafia:game_archive:test_001 '{"game_id":"test_001","winner":"mafia","chat_log":[...]}'
+
+# 2. GameInsightAgent.run() 단독 실행 후 ChromaDB 문서 수 증가 확인
+
+# 3. RAGStore 검색으로 실전 데이터 문서 포함 여부 확인
+rag_store.similarity_search("마피아 2인 열세 역전 전략")
+```
+
+**참조**: `RAG_AND_STORAGE_DESIGN.md` §8, `AGENT_DESIGN.md` §2.2, `TASK_PLAN.md` Phase 8
 
 ---
 

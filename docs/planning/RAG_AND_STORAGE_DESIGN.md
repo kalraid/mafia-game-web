@@ -1,7 +1,8 @@
 # RAG vs 저장소 설계 결정서 (RAG_AND_STORAGE_DESIGN)
 
-> **문서 버전**: v1.0  
-> **작성일**: 2026-03-18  
+> **문서 버전**: v1.1
+> **작성일**: 2026-03-18
+> **최종 업데이트**: 2026-03-20 (§8 동적 RAG 업데이트 설계 추가)
 > **목적**: RAG 활용 범위 명확화 + 평가 기준 반영
 
 ---
@@ -173,3 +174,98 @@ config = {"configurable": {"thread_id": f"{game_id}_{agent_id}"}}
 | 채팅 히스토리 저장소 | 🔴 Redis + LangGraph Checkpointer |
 | Agent 단기 기억 | 🔴 Redis (per agent, per game) |
 | 실시간 게임 상태 | 🔵 In-Memory (Phase, 타이머, 투표 집계) |
+| 실전 게임 데이터 → RAG? | ✅ §8 GameInsightAgent로 자동 추가 (source=runtime) |
+
+---
+
+## 8. 동적 RAG 업데이트 — GameInsightAgent 설계 (Phase 8)
+
+### 8.1 개요
+
+정적 지식베이스(20개 문서)는 게임 간 공유되는 범용 전략을 담지만,
+실전 판에서 나온 패턴은 점차 쌓일수록 AI 플레이 품질을 더욱 향상시킬 수 있음.
+`GameInsightAgent`가 게임 종료 후 백그라운드로 실행되어 인사이트를 자동으로 RAG에 추가.
+
+### 8.2 새 Redis 키 스키마
+
+| 키 | 타입 | 내용 | TTL |
+|----|------|------|-----|
+| `mafia:game_archive:{game_id}` | String (JSON) | 완료된 GameState 전체 | 30일 |
+| `mafia:game_analysis:processed` | Set | 분석 완료된 game_id 목록 | 없음 |
+
+### 8.3 파이프라인 흐름
+
+```
+GameEngine (in-memory GameState)
+  │
+  ▼ [게임 종료 hook — runner.py]
+  │
+  ▼ Redis  mafia:game_archive:{game_id}  (JSON, TTL 30일)
+  │
+  ▼ GameInsightAgent  (mafia:game_analysis:processed SET으로 중복 방지)
+  │
+  ▼ LLM (Claude) — bind_tools + with_structured_output
+  │    ├── read_game_record()       Redis 게임 기록 조회
+  │    ├── search_existing_rag()    기존 RAG 중복 방지 검색
+  │    └── write_insight_doc()      RAGStore에 문서 추가
+  ▼
+  ChromaDB  ai_mafia_knowledge 컬렉션  (source="runtime")
+```
+
+### 8.4 LangGraph StateGraph 구조
+
+```
+[load_pending] → [analyze] ──(tool_calls 루프)──→ [write_rag] → [mark_done] → END
+```
+
+- **load_pending**: Redis에서 미분석 game_id 목록 조회
+- **analyze**: Claude LLM + bind_tools 로 게임 기록 분석 (ReAct 루프)
+- **write_rag**: 생성된 인사이트 문서를 RAGStore에 추가
+- **mark_done**: 처리 완료 game_id를 `mafia:game_analysis:processed` SET에 추가
+
+### 8.5 RAG 문서 메타데이터 구분
+
+| 필드 | 정적 지식 | 실전 데이터 |
+|------|----------|-----------|
+| `source` | `"static"` | `"runtime"` |
+| `category` | strategies / situations 등 | strategy / situation / speech_pattern |
+| `game_id` | 없음 | 원본 game_id |
+| `insight_type` | 없음 | winning_pattern / speech_pattern / voting_pattern |
+
+### 8.6 생성 문서 예시
+
+```markdown
+# 마피아 2인 열세 역전 전략 (실전 데이터)
+
+category: strategy
+source: runtime
+game_id: game_abc123
+insight_type: winning_pattern
+tags: [mafia, endgame, 2v4]
+
+## 상황
+라운드 3, 마피아 2명 vs 시민 4명.
+
+## 관찰된 패턴
+- 마피아 A가 경찰 의심을 받는 시민 B에게 공격적으로 동조 → 투표 집중 유도
+- 마피아 B는 침묵 전략으로 의심 분산
+- 결과: 3연속 시민 처형 성공 후 역전
+```
+
+### 8.7 메모리 계층 갱신
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  L1. Agent 실행 컨텍스트 (In-Memory, 단일 호출)                  │
+├─────────────────────────────────────────────────────────────────┤
+│  L2. 게임 세션 메모리 (Redis, 게임 종료까지 유지)                │
+│      + mafia:game_archive:{game_id}  (게임 종료 후 30일 보관)    │
+│      + mafia:game_analysis:processed (중복 분석 방지)            │
+├─────────────────────────────────────────────────────────────────┤
+│  L3. 전략 지식베이스 (RAG / ChromaDB, 영구 유지)                 │
+│      source=static  : 정적 지식 20개 (docs/rag_knowledge/)       │
+│      source=runtime : 실전 인사이트 (GameInsightAgent 자동 추가) │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**구현 지시**: `WORK_ORDER_CURSOR.md` C-10 참조
