@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 import re
 from pathlib import Path
 from typing import Iterable, List, Tuple
@@ -25,10 +26,20 @@ class RAGStore:
         self._indexed = False
         self._knowledge_root: Path | None = None
 
-    def add_documents(self, texts: Iterable[str], metadatas: Iterable[dict] | None = None) -> None:
-        ids = [f"doc_{i}" for i, _ in enumerate(texts)]
-        embeddings: List[list[float]] = self.embedder.encode(list(texts), convert_to_numpy=False)  # type: ignore[assignment]
+    def add_documents(
+        self,
+        texts: Iterable[str],
+        metadatas: Iterable[dict] | None = None,
+        ids: Iterable[str] | None = None,
+    ) -> None:
         docs_texts = list(texts)
+        if ids is None:
+            # runtime 문서가 누적될 수 있도록 id를 유니크하게 생성한다.
+            ids = [f"doc_{uuid.uuid4().hex}_{i}" for i in range(len(docs_texts))]
+        else:
+            ids = list(ids)
+
+        embeddings: List[list[float]] = self.embedder.encode(docs_texts, convert_to_numpy=False)  # type: ignore[assignment]
         self.collection.upsert(
             ids=ids,
             documents=docs_texts,
