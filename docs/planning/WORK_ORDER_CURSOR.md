@@ -2,7 +2,7 @@
 
 > **대상**: Cursor AI — 백엔드 개발자
 > **작성자**: Claude AI (기획자 + 인프라)
-> **최종 업데이트**: 2026-03-20 (C-10 GameInsightAgent 신규 추가)
+> **최종 업데이트**: 2026-03-20 (C-11 즉시 버그 수정 신규 추가 — 소스 전수 분석 결과)
 
 > 작업 전 반드시 `ROLE_CURSOR.md`와 이 문서를 먼저 읽을 것.  
 > **docker-compose.yml은 수정하지 않는다** — Claude 담당.
@@ -33,6 +33,94 @@
 | — | `_AgentCallState` 직렬화 개선 (`_invoke_agent()` 헬퍼) | `b6d9fe1` |
 | — | `langgraph-checkpoint-redis` requirements 추가 | `b6d9fe1` |
 | — | `backend/Dockerfile` 경로 이동 (루트→backend/) | `b6d9fe1` |
+
+---
+
+## 🔴 긴급 버그 수정
+
+### [C-11] 즉시 수정 — 소스 전수 분석 발견 버그 3건
+
+> **우선순위 최상위** — C-2 이전에 반드시 처리.
+
+---
+
+#### C-11-1: `backend/game/snapshot.py` — FINAL_VOTE phase 문자열 오류
+
+**증상**: 프론트엔드가 FINAL_VOTE 단계에서 잘못된 phase값을 받아 UI 라우팅 오류.
+
+**수정 내용**: `ui_phase()` 함수 내 `Phase.FINAL_VOTE` 매핑을 `"final_speech"` → `"final_vote"` 로 수정.
+
+```python
+# 현재 (❌)
+Phase.FINAL_VOTE: "final_speech",
+
+# 수정 (✅)
+Phase.FINAL_VOTE: "final_vote",
+```
+
+---
+
+#### C-11-2: `backend/mcp/tools.py` — `submit_vote()` 파라미터 불일치
+
+**증상**: `player_agent.py`에서 `voter_id=self.player.id` 키워드로 호출하는데 `tools.py` 시그니처는 `agent_id`를 사용 → `TypeError` 발생 가능.
+
+**수정 내용**: 둘 중 하나를 통일. `tools.py` 기준으로 맞춘다.
+
+```python
+# tools.py 현재 (예시)
+def submit_vote(self, agent_id: str, target_id: str) -> bool: ...
+
+# player_agent.py 현재 (❌ 불일치)
+mcp_tools.submit_vote(voter_id=self.player.id, target_id=target)
+
+# player_agent.py 수정 (✅)
+mcp_tools.submit_vote(agent_id=self.player.id, target_id=target)
+```
+
+두 파일을 열어 실제 파라미터명을 확인하고 `agent_id` / `voter_id` 중 하나로 통일할 것.
+
+---
+
+#### C-11-3: `backend/game/roles.py` — FORTUNE_TELLER / SPY handler 누락
+
+**증상**: `player_agent._allowed_ability_for_role()`에서 FORTUNE_TELLER → `"investigate"`, SPY → 능력 부여하는데 `ROLE_ABILITIES` 딕셔너리에 handler가 없어 능력 발동 시 아무 효과 없음.
+
+**수정 내용**: `ROLE_ABILITIES`에 두 역할 handler 추가.
+
+```python
+# roles.py — 아래 두 핸들러 추가
+
+def fortune_teller_divine(ctx: RoleAbilityContext) -> GameState:
+    """점쟁이: 대상의 팀(마피아/시민)을 확인. 경찰과 동일하나 결과를 공개하지 않음."""
+    if ctx.target:
+        result = f"{ctx.target.name}은 {ctx.target.team.value}입니다. (점술 결과 — 비공개)"
+        ctx.game_state.reports.append(Report(
+            agent_id=ctx.actor.id, content=result, round=ctx.game_state.round
+        ))
+    return ctx.game_state
+
+def spy_eavesdrop(ctx: RoleAbilityContext) -> GameState:
+    """스파이: 밤 마피아 채팅 채널을 열람 (관찰 메모 저장)."""
+    # 마피아 채널 메시지를 reports에 기록 (spy용 채널 열람 효과)
+    mafia_chats = [
+        msg for msg in ctx.game_state.chat_log
+        if msg.get("channel") == "mafia_secret" and msg.get("round") == ctx.game_state.round
+    ]
+    summary = " | ".join(m.get("content", "") for m in mafia_chats) or "마피아 채팅 없음"
+    ctx.game_state.reports.append(Report(
+        agent_id=ctx.actor.id, content=f"[스파이 도청] {summary}", round=ctx.game_state.round
+    ))
+    return ctx.game_state
+
+# ROLE_ABILITIES 딕셔너리에 추가
+ROLE_ABILITIES = {
+    ...기존...,
+    Role.FORTUNE_TELLER: fortune_teller_divine,
+    Role.SPY: spy_eavesdrop,
+}
+```
+
+> `GameState.chat_log` 실제 필드명은 코드에서 확인 후 맞게 조정할 것.
 
 ---
 

@@ -2,7 +2,7 @@
 
 > **대상**: Gemini AI — 프론트엔드 개발자
 > **작성자**: Claude AI (기획자 + 인프라 엔지니어)
-> **최종 업데이트**: 2026-03-20 (우선순위 재정리)
+> **최종 업데이트**: 2026-03-20 (G-13/G-14 신규 추가 — 소스 전수 분석 결과)
 
 > 작업 전 `.geminirules` 읽기 → `WORK_ORDER_GEMINI.md` 확인 → 작업 시작.
 
@@ -18,88 +18,145 @@
 
 ---
 
-## ✅ 완료된 작업
+## ✅ 완료된 작업 (소스 분석 확인)
 
-| 항목 | 커밋 |
-|------|------|
-| G-2 로비 화면 | `cca37b07` |
-| G-3 마피아 채널 탭 | `cca37b07` |
-| G-4 WebSocket 이벤트 핸들러 | `cca37b07` |
-| G-5 결과 화면 | `82e0600` |
-| G-6 CSS 스타일링 (낮/밤 테마) | `82e0600` |
-| G-8 frontend/Dockerfile | `82e0600` |
-
----
-
-## 🔴 긴급 작업 (마지 막는 중)
-
-### [G-10] CSS 경로 버그 수정 — **docker-compose 크래시 원인**
-
-**파일**: `frontend/app.py`  
-**원인**: 컨테이너 WORKDIR는 `/app`, 파일은 `COPY . .`로
-`/app/assets/style.css` 위치에 있으나 코드는 `frontend/assets/style.css`를 찾아 **FileNotFoundError** 만발.
-
-```python
-# 현재 (❌ 컨테이너에서 컨테이너 크래시)
-with open("frontend/assets/style.css") as f:
-    st.markdown(...)
-
-# 수정 (✅ 컨테이너 + 로컀 모두 동작)
-import os
-css_path = os.path.join(os.path.dirname(__file__), "assets", "style.css")
-with open(css_path) as f:
-    st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
-```
-
-> **주의**: `os.path.dirname(__file__)` 사용 시 로컀(`streamlit run frontend/app.py`)와
-> 컨테이너(`streamlit run app.py`) 모두 에서 정확한 경로를 찾습니다.
+| 항목 | 내용 | 확인 |
+|------|------|------|
+| G-2 | 로비 화면 | ✅ `cca37b07` |
+| G-3 | 마피아 채널 탭 | ✅ `cca37b07` |
+| G-4 | WebSocket 이벤트 핸들러 | ✅ `cca37b07` |
+| G-5 | 결과 화면 | ✅ `82e0600` |
+| G-6 | CSS 스타일링 (낮/밤 테마) | ✅ `82e0600` |
+| G-8 | frontend/Dockerfile | ✅ `82e0600` |
+| G-10 | CSS 경로 버그 (`os.path.join(__file__)` 방식) | ✅ 소스 분석으로 확인 |
+| G-11 | REST URL 환경변수화 (`BACKEND_URL`) | ✅ 소스 분석으로 확인 |
+| G-7 | `pages/game.py` 레이아웃 (`columns([3,1])`) | ✅ 소스 분석으로 확인 |
+| G-9 | `is-suspected-1/2/3` CSS 정의 | ✅ style.css 129~141번 라인 확인 |
+| G-1 | voter 필드 확인 | ✅ 소스 분석으로 확인 |
 
 ---
 
-### [G-11] REST API URL 환경변수화
+## 🔴 긴급 버그 수정
 
-**파일**: `frontend/components/status_panel.py`  
-**문제**: REST 호출이 `http://localhost:8000` 하드코딩. 서버 배포 시 호스트명 변경 시 일일이 수정 필요.
+### [G-13] 즉시 수정 — 소스 전수 분석 발견 버그 4건
 
-```python
-# 현재 (❌ 하드코딩)
-requests.post(f"http://localhost:8000/game/{game_id}/vote", ...)
-
-# 수정 (✅ 환경변수 활용)
-import os
-BACKEND_URL = os.environ.get("BACKEND_URL", "http://localhost:8000")
-requests.post(f"{BACKEND_URL}/game/{game_id}/vote", ...)
-```
-
-적용 대상: `status_panel.py`의 **모든** `requests.post` 호출 (vote, ability)
+> **우선순위 최상위** — G-14 이전에 반드시 처리.
 
 ---
 
-## 🟡 중간 우선순위
+#### G-13-1: `frontend/app.py` L78 — `message` 변수명 충돌
 
-### [G-1] voter 필드 확인
+**증상**: `handle_message(message)` 함수 파라미터와 내부 `message = payload.get(...)` 할당 충돌.
+`ability_result` 이벤트 처리 시 원본 메시지 객체가 덮어씌워짐.
 
-`status_panel.py`에서 투표/능력 Body의 키 이름이 스펙 일치하는지 확인:
-```
-POST /vote:    { "voter": str, "voted_for": str | None }
-POST /ability: { "player_name": str, "ability": str, "target": str }
-```
-
-### [G-7] `pages/game.py` 레이아웃
-
-3/4 채팅 + 1/4 상태창 확인:
 ```python
-def draw_game():
-    col_chat, col_status = st.columns([3, 1])
-    with col_chat:   draw_chat_area()
-    with col_status: draw_status_panel()
+# 현재 (❌)
+def handle_message(message):
+    ...
+    elif event == "ability_result":
+        payload = message.get("payload", {})
+        message = payload.get("message", "")   # ← 파라미터 덮어씀
+
+# 수정 (✅)
+    elif event == "ability_result":
+        payload = message.get("payload", {})
+        ability_msg = payload.get("message", "")   # ← 변수명 변경
+        st.session_state.ability_result = ability_msg
 ```
 
-### [G-9] `is-suspected-N` CSS
+---
 
-`player_card.py`에서 `is-suspected-1/2/3` 클래스 적용 중이나 `style.css`에 정의 없음.  
-**방법 A**: style.css에 추가  
-**방법 B**: player_card.py에서 해당 로직 제거
+#### G-13-2: `frontend/app.py` — `game_state` 초기값 phase 불일치
+
+**증상**: `game_state = {"phase": "day"}` 초기화하나 실제 백엔드 phase 키는 `"day_chat"`, `"day_vote"`, `"night"` 등 → 초기 라우팅 불일치.
+
+```python
+# 현재 (❌)
+st.session_state.game_state = {"phase": "day"}
+
+# 수정 (✅)
+st.session_state.game_state = {"phase": "lobby"}
+# phase_map 라우터에 "lobby" 키 없으면 lobby 화면 기본 표시하도록 처리
+```
+
+---
+
+#### G-13-3: `frontend/components/status_panel.py` — `final_speech` 처형 투표 버튼 미구현
+
+**증상**: FINAL_VOTE 단계 "처형 찬성 / 반대" 버튼이 `pass`만 있어 동작 불가.
+
+```python
+# 현재 (❌)
+if st.button("찬성"):
+    pass
+if st.button("반대"):
+    pass
+
+# 수정 (✅)
+col1, col2 = st.columns(2)
+with col1:
+    if st.button("👍 처형 찬성"):
+        resp = requests.post(
+            f"{BACKEND_URL}/game/{game_id}/vote",
+            json={"voter": player_name, "voted_for": st.session_state.get("execution_target")},
+        )
+        handle_request_error(resp, "투표 실패")
+with col2:
+    if st.button("👎 처형 반대"):
+        resp = requests.post(
+            f"{BACKEND_URL}/game/{game_id}/vote",
+            json={"voter": player_name, "voted_for": None},
+        )
+        handle_request_error(resp, "기권 처리 실패")
+```
+
+`execution_target`은 `game_state_update` WebSocket payload에서 백엔드가 전달하는 키명으로 연동. 실제 키명은 `backend/game/snapshot.py` 확인 후 맞출 것.
+
+---
+
+#### G-13-4: `frontend/pages/lobby.py` — 게임 시작 시 백엔드 세션 생성 API 미호출
+
+**증상**: "게임 시작" 버튼이 `game_id`를 클라이언트에서만 생성하고 백엔드에 세션 생성 요청을 보내지 않음 → 백엔드 `GameRegistry`에 해당 game_id 없어 WebSocket/API 실패 가능.
+
+```python
+# 수정 예시 (백엔드 main.py에서 실제 엔드포인트 확인 후 맞출 것)
+if st.button("게임 시작"):
+    resp = requests.post(
+        f"{BACKEND_URL}/game/create",
+        json={"player_count": player_count, "host_name": player_name}
+    )
+    if resp.ok:
+        data = resp.json()
+        st.session_state.game_id = data.get("game_id", f"game_{player_name}")
+        st.session_state.page = "game"
+        st.rerun()
+    else:
+        st.error("게임 생성 실패")
+```
+
+> **주의**: 백엔드에 게임 생성 엔드포인트가 없으면 `[인프라 보고]` 형식으로 Claude에게 보고.
+
+---
+
+### [G-14] E2E 테스트 셀렉터 수정
+
+**파일**: `frontend/tests/e2e/test_lobby.py`
+
+분석 결과 셀렉터 3곳이 실제 구현과 불일치해 실행 시 실패 예상.
+
+```python
+# BUG-F5: 레이블 불일치
+page.get_by_label("내 닉네임:")   # ❌
+page.get_by_label("닉네임")       # ✅ (lobby.py st.text_input label)
+
+# BUG-F6: heading 이모지 순서 불일치
+name="AI Mafia Online 🎭"         # ❌
+name="🎭 AI Mafia Online"         # ✅
+
+# BUG-F7: heading level 불일치 (st.header → h2)
+level=1                           # ❌
+level=2                           # ✅
+```
 
 ---
 

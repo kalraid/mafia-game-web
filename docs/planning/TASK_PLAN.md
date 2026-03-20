@@ -1,9 +1,9 @@
 # 작업 계획서 (TASK_PLAN)
 
-> **문서 버전**: v2.1
+> **문서 버전**: v2.2
 > **최초 작성일**: 2026-03-18
-> **최종 업데이트**: 2026-03-20 (Phase 8 GameInsightAgent 추가)
-> **기준 커밋**: `cff6e95` (ROLE_*.md 갱신, AI 전용 파일 추가)
+> **최종 업데이트**: 2026-03-20 (소스 전수 분석 반영 — 버그 목록 갱신, G-10/11/7/9 완료 반영)
+> **기준 커밋**: `a1ff7a6` (Phase 8 설계 문서)
 
 ---
 
@@ -61,8 +61,8 @@ Phase 8: GameInsightAgent — 게임 결과 RAG 자동 업데이트  ⬜ 설계 
 |---|------|------|
 | 7-1~7-3 | Docker 3서비스 | ✅ |
 | 7-4~7-7 | CSS, 타이머, 결과화면, README | ✅ |
-| 7-8 | **CSS 경로 버그** | ❌ **버그** |
-| 7-9 | **REST 하드코딩 URL** | 🔄 부분 |
+| 7-8 | CSS 경로 버그 (`app.py` os.path.join 방식) | ✅ 수정완료 (G-10) |
+| 7-9 | REST URL 환경변수화 (`BACKEND_URL`) | ✅ 수정완료 (G-11) |
 
 ---
 
@@ -120,55 +120,51 @@ docker-compose up --build
 
 ---
 
-## 4. 현재 버그 목록 (docker-compose 관련) 🚨
+## 4. 현재 버그 목록 🚨 (소스 전수 분석 기준 — 2026-03-20)
 
-### 🔴 [BUG-1] CSS 경로 버그 — **Frontend 컨테이너 크래시 원인**
+### 🔴 백엔드 즉시 수정 필요 (C-11)
 
-**파일**: `frontend/app.py`  
-**문제**: 컨테이너 내 WORKDIR는 `/app`, 파일은 `COPY . .`로
-`/app/assets/style.css`에 이용 되지만 코드는 `frontend/assets/style.css` 경로를 찾음.
+| # | 파일 | 버그 내용 | 증상 |
+|---|------|---------|------|
+| BUG-B1 | `backend/game/snapshot.py` | `FINAL_VOTE` → `"final_speech"` 반환 (should be `"final_vote"`) | 프론트 phase 표시 오류 |
+| BUG-B2 | `backend/mcp/tools.py` | `submit_vote()` 파라미터 `voter_id` vs `agent_id` 불일치 | `TypeError` 발생 가능 |
+| BUG-B3 | `backend/game/roles.py` | `FORTUNE_TELLER` / `SPY` ROLE_ABILITIES handler 누락 | 특수 역할 능력 무효화 |
 
-```python
-# 현재 (❌ 컨테이너에서 실패)
-with open("frontend/assets/style.css") as f:
+### 🔴 프론트엔드 즉시 수정 필요 (G-13)
 
-# 수정 후 (✅)
-with open("assets/style.css") as f:
-```
+| # | 파일 | 버그 내용 | 증상 |
+|---|------|---------|------|
+| BUG-F1 | `frontend/app.py` L78 | `message = payload.get(...)` 가 함수 파라미터 `message` 를 덮어씀 | ability_result 이벤트 처리 오류 |
+| BUG-F2 | `frontend/app.py` | `game_state = {"phase": "day"}` 초기값 → 실제 키는 `"day_chat"` | phase 라우팅 불일치 |
+| BUG-F3 | `frontend/components/status_panel.py` | `final_speech` 처형 찬성/반대 버튼 → `pass` 만 있음 | FINAL_VOTE 단계 동작 불가 |
+| BUG-F4 | `frontend/pages/lobby.py` | 게임 시작 시 백엔드 세션 생성 API 미호출, `game_id` 클라이언트 단독 생성 | 백엔드와 세션 동기화 불가 |
 
-**담당**: Gemini (G-10)
+### 🟡 프론트엔드 테스트 수정 필요 (G-14)
 
----
+| # | 파일 | 버그 내용 |
+|---|------|---------|
+| BUG-F5 | `frontend/tests/e2e/test_lobby.py` | `get_by_label("내 닉네임:")` → 실제 label은 `"닉네임"` |
+| BUG-F6 | `frontend/tests/e2e/test_lobby.py` | `heading name="AI Mafia Online 🎭"` → 실제는 `"🎭 AI Mafia Online"` |
+| BUG-F7 | `frontend/tests/e2e/test_lobby.py` | `heading level=1` → 실제는 `st.header()` (h2) |
 
-### 🟡 [BUG-2] REST API URL 하드코딩 — 서버 배포 시 변경 필요
+### ✅ 수정 완료
 
-**파일**: `frontend/components/status_panel.py`  
-**문제**: REST 호출이 `http://localhost:8000/...`으로 하드코딩. `BACKEND_URL` 환경변수를 미사용.
-
-```python
-# 현재 (❌ 하드코딩)
-response = requests.post(f"http://localhost:8000/game/{game_id}/vote", ...)
-
-# 수정 후 (✅ 환경변수 사용)
-backend_url = os.environ.get("BACKEND_URL", "http://localhost:8000")
-response = requests.post(f"{backend_url}/game/{game_id}/vote", ...)
-```
-
-**담당**: Gemini (G-11)
-
----
+| # | 내용 | 담당 |
+|---|------|------|
+| ~~BUG-1~~ | CSS 경로 버그 (`os.path.join` 방식) | G-10 ✅ |
+| ~~BUG-2~~ | REST URL 하드코딩 → `BACKEND_URL` 환경변수 | G-11 ✅ |
 
 ### ℹ️ [INFO] WS_URL 네트워크 설명
 
-`streamlit-websocket-client`는 브라우저 JS에서 WebSocket을 열기 때문에  
-Docker 내부 hostname(`backend`)은 접근 불가. 륌래스탑 docker-compose는:
+`streamlit-websocket-client`는 브라우저 JS에서 WebSocket을 열기 때문에
+Docker 내부 hostname(`backend`)은 접근 불가.
 
 ```
-# docker-compose 로컸 테스트 (localhost 접근)
+# docker-compose 로컬 테스트
 WS_URL=ws://localhost:8000   ← 현재 설정 ✅
 BACKEND_URL=http://localhost:8000
 
-# 원격 서버 린치 시
+# 원격 서버 배포 시
 WS_URL=ws://<서버IP>:8000
 BACKEND_URL=http://<서버IP>:8000
 ```
@@ -199,26 +195,40 @@ BACKEND_URL=http://<서버IP>:8000
 
 ---
 
-## 6. 현재 이슈 목록
+## 6. 현재 이슈 목록 (소스 전수 분석 기준)
 
-### 🔴 시급
+### 🔴 시급 — 즉시 수정
 
 | # | 이슈 | 담당 | 조치 |
 |---|------|------|------|
-| BUG-1 | `frontend/app.py` CSS 경로 버그 | Gemini | G-10 |
+| BUG-B1 | `snapshot.py` FINAL_VOTE → "final_speech" 반환 오류 | Cursor | **C-11** |
+| BUG-B2 | `mcp/tools.py` submit_vote 파라미터 불일치 (TypeError 가능) | Cursor | **C-11** |
+| BUG-B3 | `roles.py` FORTUNE_TELLER/SPY handler 누락 — 능력 무효화 | Cursor | **C-11** |
+| BUG-F1 | `app.py` L78 message 변수 충돌 | Gemini | **G-13** |
+| BUG-F2 | `app.py` phase 초기값 "day" → "day_chat" 불일치 | Gemini | **G-13** |
+| BUG-F3 | `status_panel.py` final_speech 버튼 pass 미구현 | Gemini | **G-13** |
+| BUG-F4 | `lobby.py` 백엔드 게임 세션 생성 API 미호출 | Gemini | **G-13** |
 | I-1 | MCP ToolNode ReAct 루프 미완 | Cursor | C-2 |
-| I-3 | RAG 지식베이스 6개만 → **20개 작성 완료** (`docs/rag_knowledge/`) | Claude | ✅ 완료 → C-9 (Cursor 인덱싱 필요) |
 
 ### 🟡 중간
 
 | # | 이슈 | 담당 | 조치 |
 |---|------|------|------|
-| BUG-2 | REST URL 하드코딩 | Gemini | G-11 |
+| BUG-F5~7 | E2E 테스트 셀렉터 불일치 (레이블/이모지/heading) | Gemini | **G-14** |
 | I-2 | Redis Checkpointer 폴백 제거 | Cursor | C-5 |
-| I-4 | `pages/game.py` 레이아웃 미확인 | Gemini | G-7 |
-| I-5 | voter 필드 확인 커밋 없음 | Gemini | G-1 |
-| I-6 | is-suspected CSS 클래스 없음 | Gemini | G-9 |
-| I-7 | 슈퍼바이저 재진단 루프 | Cursor | C-8(신규) |
+| I-7 | 슈퍼바이저 재진단 루프 | Cursor | C-8 |
+| I-8 | `GameRegistry` 하드코딩 5인 고정 — 동적 로비 없음 | Cursor | 신규 검토 필요 |
+
+### ✅ 해소된 이슈
+
+| # | 내용 |
+|---|------|
+| ~~BUG-1~~ | CSS 경로 버그 (G-10 완료) |
+| ~~BUG-2~~ | REST URL 하드코딩 (G-11 완료) |
+| ~~I-3~~ | RAG 지식베이스 20개 작성 완료 → C-9 인덱싱 대기 |
+| ~~I-4~~ | `pages/game.py` 레이아웃 구현 완료 (G-7 완료) |
+| ~~I-5~~ | voter 필드 확인 완료 (G-1 완료) |
+| ~~I-6~~ | is-suspected-1/2/3 CSS 정의 확인 완료 (G-9 완료) |
 
 ---
 
@@ -226,14 +236,19 @@ BACKEND_URL=http://<서버IP>:8000
 
 ### Claude
 ```
-✅ Phase 8 설계 완료 (TASK_PLAN Phase 8, WORK_ORDER C-10, RAG_AND_STORAGE_DESIGN §8)
-- I-3 (RAG 지식베이스 20개 작성) → 완료, C-9 인덱싱은 Cursor 담당
+✅ Phase 8 설계 완료, 소스 전수 분석 완료 → 추가 지시서 발행 완료
 ```
 
 ### Cursor
 ```
 WORK_ORDER_CURSOR.md 참조
-C-2 (ToolNode) → C-5 (Redis 안정화) → C-7 (roles.py) → C-10 (GameInsightAgent)
+C-11 (즉시 버그) → C-2 (ToolNode) → C-9 (RAG 인덱싱) → C-5 (Redis) → C-8 (재진단 루프) → C-10 (GameInsightAgent)
+```
+
+### Gemini
+```
+WORK_ORDER_GEMINI.md 참조
+G-13 (즉시 버그) → G-14 (E2E 테스트 셀렉터)
 ```
 
 ### Gemini
