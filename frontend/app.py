@@ -74,13 +74,14 @@ def handle_message(message):
                     p["votes"] = vote_counts.get(p["name"], 0)
             st.rerun()
         elif event == "ability_result":
-            # Payload is expected to be {"success": bool, "message": str}
-            message = payload.get("message", "능력 사용 결과가 도착했습니다.")
+            payload = data.get("payload", {})
+            ability_msg = payload.get("message", "능력 사용 결과가 도착했습니다.")
             success = payload.get("success", True)
+            st.session_state.ability_result = ability_msg # Store for potential future use
             if success:
-                st.toast(f"✅ {message}", icon="✅")
+                st.toast(f"✅ {ability_msg}", icon="✅")
             else:
-                st.toast(f"❌ {message}", icon="❌")
+                st.toast(f"❌ {ability_msg}", icon="❌")
             # No rerun needed for toast
         elif event == "game_over":
             st.session_state.game_state.update(payload)
