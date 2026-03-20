@@ -6,6 +6,7 @@ from backend.game.phase import get_next_phase, get_phase_duration
 from backend.game.vote import tally_votes
 from backend.game.win_condition import check_winner
 from backend.models.game import GameEvent, GameState, Phase
+from backend.game.roles import ROLE_ABILITIES, RoleAbilityContext
 
 
 class GameEngine:
@@ -63,20 +64,58 @@ class GameEngine:
                 self.ability_requests = {}
                 return
 
-            attack_targets = [
-                req.get("target_id")
-                for req in self.ability_requests.values()
-                if req.get("ability") == "attack" and req.get("target_id")
-            ]
-            heal_targets = {
-                req.get("target_id")
-                for req in self.ability_requests.values()
-                if req.get("ability") == "heal" and req.get("target_id")
-            }
+            players_by_id = {p.id: p for p in self.state.players}
 
-            kill_target = attack_targets[0] if attack_targets else None
-            if kill_target and kill_target not in heal_targets:
-                self._kill_player(kill_target, cause="night_attack")
+            # 의사 보호(protected)는 NIGHT_ABILITY 종료 후 해제한다.
+            protected_targets: list[str] = []
+
+            # 1) 보호/조사 먼저 처리 (heal -> investigate)
+            for actor_id, req in self.ability_requests.items():
+                ability = req.get("ability")
+                target_id = req.get("target_id")
+                if not ability or not target_id:
+                    continue
+
+                actor = players_by_id.get(actor_id)
+                target = players_by_id.get(target_id)
+                if actor is None or target is None:
+                    continue
+
+                # heal: doctor protect
+                if ability == "heal":
+                    handler = ROLE_ABILITIES.get(actor.role)
+                    if handler is not None:
+                        handler(RoleAbilityContext(game_state=self.state, actor=actor, target=target))
+                        protected_targets.append(target.id)
+
+                # investigate: detective/fortune_teller 조사
+                if ability == "investigate":
+                    handler = ROLE_ABILITIES.get(actor.role)
+                    if handler is not None:
+                        handler(RoleAbilityContext(game_state=self.state, actor=actor, target=target))
+
+            # 2) 공격은 최종 1명 처치 (MVP: 첫 번째 attack 요청만 적용)
+            first_attack: tuple[str, dict] | None = None
+            for actor_id, req in self.ability_requests.items():
+                if req.get("ability") == "attack" and req.get("target_id"):
+                    first_attack = (actor_id, req)
+                    break
+
+            if first_attack is not None:
+                actor_id, req = first_attack
+                actor = players_by_id.get(actor_id)
+                target_id = req.get("target_id")
+                target = players_by_id.get(target_id) if isinstance(target_id, str) else None
+                if actor is not None and target is not None:
+                    handler = ROLE_ABILITIES.get(actor.role)
+                    if handler is not None:
+                        handler(RoleAbilityContext(game_state=self.state, actor=actor, target=target))
+
+            # 3) protected 플래그 해제
+            for pid in protected_targets:
+                p = players_by_id.get(pid)
+                if p is not None:
+                    p.ability_used = False
 
             self.ability_requests = {}
 

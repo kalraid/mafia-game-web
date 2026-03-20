@@ -153,6 +153,46 @@ def test_engine_night_ability_heal_cancels_attack() -> None:
     assert state.players[2].is_alive is True
 
 
+def test_engine_night_ability_killer_piercing_ignores_protection() -> None:
+    state = GameState(
+        game_id="g7b",
+        phase=Phase.NIGHT_ABILITY,
+        round=2,
+        timer_seconds=60,
+        players=[
+            Player(id="k1", name="Killer", role=Role.KILLER, team=Team.MAFIA, is_alive=True),
+            Player(id="d1", name="Doctor", role=Role.DOCTOR, team=Team.CITIZEN, is_alive=True),
+            Player(id="c1", name="Citizen", role=Role.CITIZEN, team=Team.CITIZEN, is_alive=True),
+        ],
+    )
+    engine = GameEngine(state)
+
+    # killer attack + doctor heal on the same target
+    engine.submit_ability(agent_id="k1", ability="attack", target_id="c1")
+    engine.submit_ability(agent_id="d1", ability="heal", target_id="c1")
+    engine.advance_phase()
+
+    assert state.players[2].is_alive is False
+
+
+def test_engine_night_ability_detective_investigate_writes_report() -> None:
+    state = GameState(
+        game_id="g7c",
+        phase=Phase.NIGHT_ABILITY,
+        round=2,
+        timer_seconds=60,
+        players=[
+            Player(id="det", name="Detective", role=Role.DETECTIVE, team=Team.CITIZEN, is_alive=True),
+            Player(id="m1", name="Mafia1", role=Role.MAFIA, team=Team.MAFIA, is_alive=True),
+        ],
+    )
+    engine = GameEngine(state)
+    engine.submit_ability(agent_id="det", ability="investigate", target_id="m1")
+    engine.advance_phase()
+
+    assert any("Mafia1" in r.content and "mafia" in r.content.lower() for r in state.reports)
+
+
 def test_check_winner_does_not_declare_jester_when_jester_dies_at_night() -> None:
     state = GameState(
         game_id="g8",
