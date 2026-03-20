@@ -1,27 +1,162 @@
-# AI Mafia Online (Backend)
+# 🎭 AI Mafia Online
 
-## 요구사항
-- Python 3.11+
+> AI 플레이어와 함께 즐기는 웹 마피아 게임.  
+> 최대 20인, LangGraph 기반 AI Agent, RAG 전략 학습, 실시간 WebSocket 통신.
 
-## 로컬 실행
-1. 의존성 설치
-   - `pip install -r requirements.txt`
-2. 환경변수 준비
-   - `.env.example`을 복사해서 `.env`를 만든 뒤 `ANTHROPIC_API_KEY` 등 값을 채워주세요.
-3. 서버 실행
-   - `uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000`
+---
 
-## Docker 실행
-- `docker-compose up --build`
+## 프로젝트 개요
 
-## WebSocket
-- 엔드포인트: `ws://localhost:8000/ws/{game_id}`
-- 클라이언트 → 서버 메시지 포맷:
-```json
-{ "event": "chat_message", "payload": { "content": "hi", "sender": "player" } }
-{ "event": "vote", "payload": { "target": "AI_Player_3", "sender": "player" } }
-{ "event": "use_ability", "payload": { "target": "AI_Player_5", "ability": "investigate", "sender": "player" } }
+| 항목 | 내용 |
+|------|------|
+| **Frontend** | Streamlit (포트 8501) |
+| **Backend** | FastAPI + LangGraph + LangChain (포트 8000) |
+| **AI** | Claude API (claude-sonnet-4) — 없으면 Fallback 모드 |
+| **DB** | ChromaDB (RAG 벡터 DB) |
+| **세션** | Redis + LangGraph Checkpointer |
+| **통신** | WebSocket (이벤트 Push) + HTTP REST (액션) |
+
+---
+
+## 빠른 시작 (docker-compose)
+
+```bash
+# 1. 환경변수 준비
+cp .env.example .env
+# .env 편집: ANTHROPIC_API_KEY 입력 (없으면 Fallback 모드로 동작)
+
+# 2. 빌드 및 실행
+docker-compose up --build
+
+# 3. 접속
+# 프론트엔드:  http://localhost:8501
+# 백엔드 API:  http://localhost:8000/docs
+# Redis:      localhost:6379
 ```
 
-서버 → 클라이언트 메시지 포맷은 `backend/websocket/events.py`의 `ServerToClientEvent` 계약을 따릅니다.
+> **ANTHROPIC_API_KEY 없이도 실행 가능합니다.**  
+> AI 발언·투표·능력이 랜덤 Fallback 으로 동작합니다.
 
+---
+
+## 로컬 개발 (개별 실행)
+
+### 사전 준비
+
+```bash
+cp .env.example .env
+# ANTHROPIC_API_KEY, REDIS_URL 등 설정
+```
+
+### Redis 실행
+
+```bash
+docker-compose up redis
+```
+
+### Backend
+
+```bash
+pip install -r requirements.txt
+uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+자세한 내용 → [`backend/README.md`](backend/README.md)
+
+### Frontend
+
+```bash
+pip install -r frontend/requirements.txt
+streamlit run frontend/app.py
+```
+
+자세한 내용 → [`frontend/README.md`](frontend/README.md)
+
+---
+
+## 게임 방법
+
+1. `http://localhost:8501` 접속
+2. 닉네임 입력 + 인원 수 설정 후 **게임 시작**
+3. 낮에는 채팅으로 마피아를 찾아 투표 처형
+4. 밤에는 각 직업 능력 사용 (마피아 공격 / 경찰 조사 / 의사 보호 등)
+5. 시민 팀 또는 마피아가 승리 조건 달성 시 종료
+
+### 직업 구성 (8인 기준)
+
+| 직업 | 팀 | 능력 |
+|------|-----|------|
+| 시민 | 시민 | 없음 |
+| 경찰 | 시민 | 밤: 1명 조사 |
+| 의사 | 시민 | 밤: 1명 보호 |
+| 마피아 | 마피아 | 밤: 1명 공격 |
+
+---
+
+## 프로젝트 구조
+
+```
+mafia-game-web/
+├── CLAUDE.md              ← Claude AI 컨텍스트 파일
+├── .cursorrules           ← Cursor AI 자동 규칙
+├── .geminirules           ← Gemini AI 참조 규칙
+├── docker-compose.yml     ← 전체 서비스 구성 (Claude 관리)
+├── .env.example           ← 환경변수 템플릿
+├── requirements.txt       ← 백엔드 Python 의존성
+│
+├── backend/               ← FastAPI 서버 (Cursor 담당)
+│   ├── README.md
+│   ├── Dockerfile
+│   ├── main.py
+│   ├── agents/            ← LangGraph Agent
+│   ├── game/              ← 게임 엔진
+│   ├── supervisors/       ← AI 슈퍼바이저
+│   ├── rag/               ← ChromaDB + 지식베이스
+│   ├── mcp/               ← MCP Tools
+│   ├── websocket/         ← WebSocket 관리
+│   ├── models/            ← Pydantic 모델
+│   └── tests/
+│
+└── frontend/              ← Streamlit UI (Gemini 담당)
+    ├── README.md
+    ├── Dockerfile
+    ├── requirements.txt
+    ├── app.py
+    ├── pages/
+    ├── components/
+    ├── assets/
+    └── tests/
+```
+
+---
+
+## 환경변수 (.env)
+
+| 변수 | 기본값 | 설명 |
+|------|--------|------|
+| `ANTHROPIC_API_KEY` | — | Claude API 키 (없으면 Fallback) |
+| `ANTHROPIC_MODEL` | `claude-sonnet-4` | 사용할 모델 |
+| `MAFIA_USE_LLM` | `1` | `0` 설정 시 LLM 비활성화 |
+| `REDIS_URL` | `redis://localhost:6379` | Redis 연결 주소 |
+| `MAFIA_USE_REDIS_CHECKPOINTER` | `0` | `1` 설정 시 LangGraph Redis 체크포인터 활성화 |
+| `PORT` | `8000` | 백엔드 포트 |
+| `CHROMA_PERSIST_DIR` | `./backend/rag/chroma_db` | ChromaDB 저장 경로 |
+
+---
+
+## 팀 구성
+
+| 역할 | 담당 | AI 파일 |
+|------|------|--------|
+| 기획 + 인프라 | Claude | `CLAUDE.md` |
+| 백엔드 개발 | Cursor | `.cursorrules` |
+| 프론트엔드 개발 | Gemini | `.geminirules` |
+
+---
+
+## 관련 문서
+
+- [기술 아키텍처](docs/planning/TECH_ARCHITECTURE.md)
+- [게임 룰](docs/planning/GAME_RULES.md)
+- [AI Agent 설계](docs/planning/AGENT_DESIGN.md)
+- [작업 계획](docs/planning/TASK_PLAN.md)
