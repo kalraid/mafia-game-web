@@ -18,7 +18,7 @@ with open(css_path) as f:
 if "page" not in st.session_state:
     st.session_state.page = "lobby"
     st.session_state.game_id = "test_game" # Hardcoded for now
-    st.session_state.game_state = {"phase": "day"} # Default to day
+    st.session_state.game_state = {"phase": "lobby"} # Default to lobby
     
     # On first load, check backend health and RAG status
     try:
