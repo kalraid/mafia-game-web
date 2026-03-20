@@ -28,7 +28,7 @@ def ui_phase(phase: Phase) -> str:
     if phase == Phase.FINAL_SPEECH:
         return "final_speech"
     if phase == Phase.FINAL_VOTE:
-        return "final_speech"
+        return "final_vote"
     if phase in (Phase.NIGHT_MAFIA, Phase.NIGHT_ABILITY):
         return "night"
     if phase == Phase.NIGHT_RESULT:
