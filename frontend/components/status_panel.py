@@ -220,6 +220,25 @@ def draw_status_panel():
         else:
             st.write("대기 중...")
 
+    # RAG Status and Debug Panel (Task G-12)
+    st.divider()
+    
+    rag_status = st.session_state.get("rag_status", "unknown")
+    if rag_status == "ok":
+        st.caption("🧠 RAG Status: Active ✅")
+    elif rag_status == "error":
+        st.caption("🧠 RAG Status: Error ❌")
+    else:
+        st.caption("🧠 RAG Status: Unknown ❓")
+
+    with st.expander("🔍 RAG 컨텍스트 (디버그)"):
+        rag_ctx = game_state.get("rag_context", [])
+        if rag_ctx:
+            for i, ctx in enumerate(rag_ctx):
+                st.markdown(f"**{i+1}.** {ctx}")
+        else:
+            st.caption("RAG 컨텍스트 없음")
+
 if __name__ == "__main__":
     st.session_state.game_state = {
         "phase": "낮", "round": 2, "timer_seconds": 134,
@@ -229,7 +248,12 @@ if __name__ == "__main__":
             {"name": "이지호", "is_alive": False},
             {"name": "최수아", "is_alive": True},
             {"name": "나", "is_alive": True},
+        ],
+        "rag_context": [
+            "시민 추리 패턴: 첫날 어색하게 침묵하는 사람은 마피아일 확률이 있다.",
+            "상황별 행동 사례: 8인 게임, 첫 낮에는 섣부른 지목보다 자유로운 대화로 정보를 얻는 것이 중요하다."
         ]
     }
     st.session_state.player_name = "나"
+    st.session_state.rag_status = "ok"
     draw_status_panel()

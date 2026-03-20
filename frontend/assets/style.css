@@ -124,3 +124,18 @@ body {
     background-color: #3a3a5a;
     color: #E0E0E0;
 }
+
+/* --- Suspicion Indicators on Player Cards --- */
+.player-card.is-suspected-1 {
+    border: 2px solid #C0392B !important; /* Mafia Red */
+}
+
+.player-card.is-suspected-2 {
+    border: 3px solid #C0392B !important; /* Mafia Red */
+    box-shadow: 0 0 5px #C0392B;
+}
+
+.player-card.is-suspected-3 {
+    border: 4px solid #C0392B !important; /* Mafia Red */
+    box-shadow: 0 0 10px #C0392B;
+}
