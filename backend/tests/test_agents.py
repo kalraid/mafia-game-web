@@ -120,7 +120,10 @@ def test_agent_graph_night_mafia_sends_mafia_secret_chat() -> None:
     engine = GameEngine(state)
 
     pool = AgentPool()
-    pool.create_agents(players=[p for p in state.players if p.is_alive and not p.is_human])
+    pool.create_agents(
+        players=[p for p in state.players if p.is_alive and not p.is_human],
+        engine=engine,
+    )
     agents = {a.agent_id: a for a in pool.all_agents()}
 
     graph = AgentGraph(engine=engine, agents=agents)

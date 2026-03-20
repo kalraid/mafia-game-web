@@ -120,7 +120,7 @@ class PlayerAgent:
             ability = decision.ability
             ability_target = decision.ability_target
 
-        return AgentOutput(
+        out = AgentOutput(
             speech=speech,
             action=(
                 {"type": ability, "target": ability_target}
@@ -130,6 +130,33 @@ class PlayerAgent:
             vote=vote_target,
             internal_notes=decision.reasoning,
         )
+
+        # C-2: AgentGraph에서 수동 MCP 호출을 제거했으므로,
+        # PlayerAgent가 side-effect(채팅/투표/능력)를 직접 수행한다.
+        if self.mcp_tools is not None:
+            if out.speech:
+                channel = "mafia_secret" if phase == Phase.NIGHT_MAFIA else "global"
+                self.mcp_tools.send_chat(
+                    agent_id=self.player.id,
+                    content=out.speech,
+                    channel=channel,
+                )
+            if out.vote:
+                self.mcp_tools.submit_vote(
+                    agent_id=self.player.id,
+                    target_id=out.vote,
+                )
+            if out.action:
+                ability_type = out.action.get("type")
+                ability_target = out.action.get("target")
+                if ability_type and ability_target:
+                    self.mcp_tools.use_ability(
+                        agent_id=self.player.id,
+                        ability=ability_type,
+                        target_id=ability_target,
+                    )
+
+        return out
 
     async def _decide_with_llm(self, agent_input: AgentInput) -> tuple[AgentDecision, bool]:
         phase = agent_input.game_state.phase

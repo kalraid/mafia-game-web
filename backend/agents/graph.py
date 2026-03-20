@@ -7,7 +7,6 @@ from typing import Dict, Optional, TypedDict
 
 from backend.agents.player_agent import AgentInput, AgentOutput, PlayerAgent
 from backend.game.engine import GameEngine
-from backend.mcp.tools import MCPGameTools
 from backend.supervisors.citizen import CitizenSupervisor
 from backend.supervisors.mafia import MafiaSupervisor
 from backend.supervisors.neutral import NeutralSupervisor
@@ -32,7 +31,6 @@ class AgentGraph:
     ) -> None:
         self.engine = engine
         self.agents = agents
-        self.mcp_tools = MCPGameTools(engine=self.engine)
         self.citizen_supervisor = citizen_supervisor or CitizenSupervisor()
         self.mafia_supervisor = mafia_supervisor or MafiaSupervisor()
         self.neutral_supervisor = neutral_supervisor or NeutralSupervisor()
@@ -228,21 +226,6 @@ class AgentGraph:
             await self._speech_delay(agent)
             output = await self._invoke_agent(state, agent_id)
 
-            # Agent output → MCP tool calls (GameState 업데이트)
-            if output.speech:
-                self.mcp_tools.send_chat(agent_id=agent_id, content=output.speech, channel="global")
-            if output.vote:
-                self.mcp_tools.submit_vote(agent_id=agent_id, target_id=output.vote)
-            if output.action:
-                ability_type = output.action.get("type")
-                ability_target = output.action.get("target")
-                if ability_type and ability_target:
-                    self.mcp_tools.use_ability(
-                        agent_id=agent_id,
-                        ability=ability_type,
-                        target_id=ability_target,
-                    )
-
             results[agent_id] = output
 
         return results
@@ -259,21 +242,6 @@ class AgentGraph:
                 continue
             output = await self._invoke_agent(state, agent_id)
 
-            if output.vote:
-                self.mcp_tools.submit_vote(agent_id=agent_id, target_id=output.vote)
-            if output.speech:
-                self.mcp_tools.send_chat(agent_id=agent_id, content=output.speech, channel="global")
-
-            if output.action:
-                ability_type = output.action.get("type")
-                ability_target = output.action.get("target")
-                if ability_type and ability_target:
-                    self.mcp_tools.use_ability(
-                        agent_id=agent_id,
-                        ability=ability_type,
-                        target_id=ability_target,
-                    )
-
             results[agent_id] = output
         return results
 
@@ -288,19 +256,6 @@ class AgentGraph:
             if not player.is_alive:
                 continue
             output = await self._invoke_agent(state, agent_id)
-
-            if output.action:
-                ability_type = output.action.get("type")
-                ability_target = output.action.get("target")
-                if ability_type and ability_target:
-                    self.mcp_tools.use_ability(
-                        agent_id=agent_id,
-                        ability=ability_type,
-                        target_id=ability_target,
-                    )
-            if output.speech:
-                # 밤에도 발언을 허용할지 여부는 이후 WebSocket 채널 규칙으로 분리
-                self.mcp_tools.send_chat(agent_id=agent_id, content=output.speech, channel="global")
 
             results[agent_id] = output
         return results
@@ -321,10 +276,6 @@ class AgentGraph:
 
             await self._speech_delay(agent)
             output = await self._invoke_agent(state, agent_id)
-
-            if output.speech:
-                # 밤 마피아 협의는 전용 채널로 브로드캐스트(프론트 스타일링용).
-                self.mcp_tools.send_chat(agent_id=agent_id, content=output.speech, channel="mafia_secret")
 
             results[agent_id] = output
 
