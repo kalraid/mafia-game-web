@@ -66,6 +66,13 @@ class GameRunner:
             await asyncio.sleep(max(0, self.engine.state.timer_seconds))
             self.engine.advance_phase()
 
+            # C-8: Phase 종료 후 슈퍼바이저가 상태 재진단 (trust_score 보정 등)
+            # 다음 라운드 에이전트 입력 전에 반영되도록 advance_phase 직후 실행한다.
+            if self.agent_graph is None:
+                self.ensure_agent_graph()
+            if self.agent_graph is not None:
+                self.agent_graph.supervisor_replan(self.engine.state)
+
             # player_death 이벤트 브로드캐스트
             await self._broadcast_new_deaths()
 

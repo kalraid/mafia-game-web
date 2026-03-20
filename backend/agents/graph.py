@@ -156,6 +156,43 @@ class AgentGraph:
         directives.sort(key=lambda d: priority_order.get(getattr(d, "priority", "medium"), 1))
         return "\n".join(d.content for d in directives)
 
+    def supervisor_replan(self, state: GameState) -> None:
+        """
+        C-8: Phase 종료 후 슈퍼바이저가 상태를 재진단.
+        MVP로는 `state.reports` 텍스트에 포함된 키워드를 바탕으로
+        대상 플레이어의 trust_score를 보정한다.
+
+        - '마피아/mafia' 언급: trust_score 낮춤
+        - '시민/citizen' 언급: trust_score 올림
+        """
+        if not state.reports:
+            return
+
+        # 간단한 키워드 기반 보정 (구체화는 이후 단계에서)
+        for r in list(state.reports):
+            content = (r.content or "").lower()
+            if not content.strip():
+                continue
+
+            is_mafia = "mafia" in content or "마피아" in content
+            is_citizen = "citizen" in content or "시민" in content
+            if not (is_mafia or is_citizen):
+                continue
+
+            for p in state.players:
+                # Report content에 id/name이 포함되었다고 가정
+                token_hits = (p.id.lower() in content) or (p.name.lower() in content)
+                if not token_hits:
+                    continue
+
+                if is_mafia:
+                    p.trust_score = max(0.0, min(p.trust_score, 0.2))
+                elif is_citizen:
+                    p.trust_score = max(0.0, min(1.0, max(p.trust_score, 0.8)))
+
+        # 동일 라운드 재적용 방지
+        state.reports = []
+
     async def _invoke_agent(self, state: GameState, agent_id: str) -> AgentOutput:
         config = {"configurable": {"thread_id": f"{state.game_id}_{agent_id}"}}
         graph_state = await self._agent_call_graph.ainvoke(
