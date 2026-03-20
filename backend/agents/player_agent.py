@@ -75,7 +75,7 @@ class PlayerAgent:
                 "sentence-transformers/paraphrase-multilingual-mpnet-base-v2",
             )
             store = RAGStore(persist_dir=persist_dir, embedding_model=embedding_model)
-            knowledge_dir = os.getenv("RAG_KNOWLEDGE_DIR", "./backend/rag/knowledge")
+            knowledge_dir = os.getenv("RAG_KNOWLEDGE_DIR", "./docs/rag_knowledge")
             store.index_from_disk(knowledge_root=knowledge_dir)
             PlayerAgent._rag_retriever = StrategyRetriever(store=store)
             return PlayerAgent._rag_retriever
