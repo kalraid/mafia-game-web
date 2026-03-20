@@ -5,6 +5,19 @@ version: "3.9"
 # 관리자: Claude AI (기획자 + 인프라 엔지니어)
 # Dockerfile 작성: Cursor(backend/Dockerfile), Gemini(frontend/Dockerfile)
 # ============================================================
+#
+# 로지컸 실행 방법:
+#   미리 준비: .env.example 복사 → .env 편집 (ANTHROPIC_API_KEY 선택, 없는 경우 Fallback 모드)
+#   실행:  docker-compose up --build
+#   접속:  프론트 http://localhost:8501
+#           백엔드 http://localhost:8000/docs
+#           Redis  localhost:6379
+#
+# 네트워크 주의사항:
+#   WS_URL 은 브라우저 JS가 접속하는 URL입니다.
+#   Docker 내부 호스트명(backend)은 브라우저에서 접근 불가 → localhost 사용.
+#   BACKEND_URL 도 하드코딩된 비율 변경 전까지 localhost 유지.
+# ============================================================
 
 services:
 
@@ -25,8 +38,7 @@ services:
 
   # ----------------------------------------------------------
   # Backend — FastAPI + LangGraph + LangChain
-  # Dockerfile: backend/Dockerfile (Cursor 담당)
-  # b6d9fe1에서 루트 Dockerfile → backend/Dockerfile로 이동
+  # 접속: http://localhost:8000 / ws://localhost:8000
   # ----------------------------------------------------------
   backend:
     build:
@@ -44,13 +56,22 @@ services:
       redis:
         condition: service_healthy
     environment:
+      # Redis 내부 컨테이너 통신은 service명 사용
       - REDIS_URL=redis://redis:6379
       - MAFIA_USE_REDIS_CHECKPOINTER=1
     restart: unless-stopped
 
   # ----------------------------------------------------------
   # Frontend — Streamlit
-  # Dockerfile: frontend/Dockerfile (Gemini 담당)
+  # 접속: http://localhost:8501
+  #
+  # ⚠️ WS_URL 주의:
+  #   streamlit-websocket-client는 브라우저 JS에서 WebSocket을 열기 때문에
+  #   Docker 내부 hostname(backend)이 아닌, 브라우저가 접근 가능한 localhost 사용.
+  #   서비스를 다른 서버로 옮김 시에만 WS_URL 변경 필요.
+  # ⚠️ BACKEND_URL 주의:
+  #   status_panel.py 등 REST 호출이 localhost:8000 하드코딩 중.
+  #   Gemini 타스크 G-10 (BACKEND_URL 환경변수화) 완료 시 업데이트.
   # ----------------------------------------------------------
   frontend:
     build:
@@ -60,8 +81,9 @@ services:
     ports:
       - "8501:8501"
     environment:
-      - BACKEND_URL=http://backend:8000
-      - WS_URL=ws://backend:8000
+      # 브라우저에서 접근하는 URL이므로 localhost 사용 (컨테이너 내부 hostname 불가)
+      - WS_URL=ws://localhost:8000
+      - BACKEND_URL=http://localhost:8000
     depends_on:
       - backend
     restart: unless-stopped
