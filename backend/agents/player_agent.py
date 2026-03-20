@@ -344,7 +344,7 @@ class PlayerAgent:
 
                 def _submit_vote(target_id: str) -> bool:
                     self.mcp_tools.submit_vote(
-                        voter_id=self.player.id,
+                        agent_id=self.player.id,
                         target_id=target_id,
                     )
                     return True
