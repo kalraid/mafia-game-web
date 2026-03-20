@@ -1,6 +1,5 @@
 # AI Mafia Online — Cursor Rules
 # 이 파일은 Cursor가 자동으로 읽는 프로젝트 규칙입니다.
-# 상세 역할 및 참조 문서: ROLE_CURSOR.md
 # 현재 작업 지시: docs/planning/WORK_ORDER_CURSOR.md
 
 ---
@@ -17,13 +16,15 @@ Claude(기획자)가 작성한 설계 문서를 기반으로 FastAPI, LangGraph,
 ### 수정 가능 ✅
 - `backend/` 하위 모든 파일
 - `backend/Dockerfile`
+- `backend/README.md` ← **Cursor가 직접 관리**
 - `requirements.txt`
 - `.env.example` (백엔드 항목)
 
 ### 절대 수정 금지 ❌
-- `docker-compose.yml` → Claude 담당. 변경 필요 시 Claude에게 보고
-- `docs/planning/` → Claude 담당. 문서 변경 요청은 Claude에게
+- `docker-compose.yml` → Claude 담당
+- `docs/planning/` → Claude 담당
 - `frontend/` → Gemini 담당
+- `README.md` (루트) → Claude 담당
 
 ---
 
@@ -36,19 +37,19 @@ Claude(기획자)가 작성한 설계 문서를 기반으로 FastAPI, LangGraph,
 - 타입 힌트 전 함수에 명시
 
 ### LangGraph / LangChain
-- Agent는 반드시 `bind_tools + ToolNode` ReAct 패턴 사용 (수동 파이프라인 금지)
+- Agent는 반드시 `bind_tools + ToolNode` ReAct 패턴 사용
 - `with_structured_output` 전 LLM 호출 노드에 적용
 - LangGraph `StateGraph` 사용 — 직접 async 루프 금지
-- thread_id = `f"{game_id}_{agent_id}"` 기준 Redis Checkpointer 연결
+- thread_id = `f"{game_id}_{agent_id}"` 기준 Redis Checkpointer
 
 ### FastAPI
-- 모든 엔드포인트 Pydantic 모델로 request/response 정의
+- 모든 엔드포인트 Pydantic 모델로 정의
 - `/docs` 자동 문서 항상 유효하게 유지
-- WebSocket 이벤트 변경 시 반드시 Claude에게 보고 → TECH_ARCHITECTURE.md 업데이트
+- WebSocket 이벤트 변경 시 Claude에게 보고
 
 ### 테스트
-- 테스트 파일 위치: `backend/tests/` (루트 tests/ 금지)
-- CI 환경에서 LLM 호출 비활성화: `MAFIA_USE_LLM=0`
+- 테스트 파일 위치: `backend/tests/`
+- CI 환경: `MAFIA_USE_LLM=0`
 
 ---
 
@@ -71,29 +72,29 @@ POST /game/{id}/chat    : { sender, content, channel }
 POST /game/{id}/vote    : { voter, voted_for }
 POST /game/{id}/ability : { player_name, ability, target }
 ```
-> "protect" → 서버 내부에서 "heal"로 자동 매핑
+> "protect" → "heal" 자동 매핑
 
 ---
 
-## 채팅 채널 규칙
+## 채팅 채널
 
-| 채널 | 수신 가능 |
-|------|----------|
-| `global` | 전체 플레이어 |
-| `mafia_secret` | 마피아 팀만 |
+| 채널 | 수신 |
+|------|------|
+| `global` | 전체 |
+| `mafia_secret` | 마피아만 |
 | `spy_listen` | 마피아 + 스파이 |
-| `system` | 전체 (읽기 전용) |
+| `system` | 전체 (읽기전용) |
 
 ---
 
 ## 환경변수
 
 ```env
-ANTHROPIC_API_KEY=         # LLM API 키
+ANTHROPIC_API_KEY=
 ANTHROPIC_MODEL=claude-sonnet-4
-MAFIA_USE_LLM=1            # 0=폴백 사용
+MAFIA_USE_LLM=1
 REDIS_URL=redis://localhost:6379
-MAFIA_USE_REDIS_CHECKPOINTER=1  # 1=Redis Checkpointer 활성화
+MAFIA_USE_REDIS_CHECKPOINTER=1
 CHROMA_PERSIST_DIR=./backend/rag/chroma_db
 RAG_KNOWLEDGE_DIR=./backend/rag/knowledge
 ```
@@ -102,21 +103,28 @@ RAG_KNOWLEDGE_DIR=./backend/rag/knowledge
 
 ---
 
+## README 관리
+
+`backend/README.md`는 **Cursor가 직접 관리**합니다.  
+백엔드 실행 방법, 환경변수, API 스펙, 테스트 실행 방법 등 변경 시 업데이트할 것.  
+루트 `README.md`는 Claude 담당.
+
+---
+
 ## 완료 보고 형식
 
-작업 완료 후 Claude에게:
 ```
 [완료] C-N — 작업명
 구현 내용: ...
 설계와 다르게 구현한 부분: ...
-Claude에게 요청 필요한 사항 (docker-compose 등): ...
+Claude에게 요청 (docker-compose 등): ...
 ```
 
 ---
 
 ## 필수 참조 문서
 
-1. `docs/planning/WORK_ORDER_CURSOR.md` ← **최우선 확인**
+1. `docs/planning/WORK_ORDER_CURSOR.md` ← **최우선**
 2. `docs/planning/TECH_ARCHITECTURE.md`
 3. `docs/planning/AGENT_DESIGN.md`
 4. `docs/planning/EVALUATION_REFLECTION.md`

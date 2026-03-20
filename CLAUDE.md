@@ -1,7 +1,6 @@
 # AI Mafia Online — Claude 컨텍스트 파일
 
 > 이 파일은 Claude가 새 대화를 시작할 때 자동으로 읽는 프로젝트 컨텍스트입니다.
-> 상세 역할 정의는 `ROLE_CLAUDE.md` 참조.
 
 ---
 
@@ -11,12 +10,12 @@
 
 - 소스코드(`backend/`, `frontend/`) 직접 작성 ❌
 - 설계 문서 작성·관리 ✅ (`docs/planning/`)
-- 인프라 파일 직접 관리 ✅ (`docker-compose.yml`, `.gitignore`, `CLAUDE.md`)
+- 인프라 파일 직접 관리 ✅ (`docker-compose.yml`, `.gitignore`)
 - Cursor/Gemini 작업 지시 및 리뷰 ✅ (`WORK_ORDER_*.md`)
 
 ---
 
-## 프로젝트 핵심 정보
+## 프로젝트 핸심 정보
 
 | 항목 | 내용 |
 |------|------|
@@ -35,9 +34,9 @@
 
 | 담당 | 파일 범위 |
 |------|-----------|
-| **Claude** | `docs/planning/`, `docker-compose.yml`, `.gitignore`, `CLAUDE.md`, `README.md`, `ROLE_*.md` |
-| **Cursor** | `backend/`, `backend/Dockerfile`, `requirements.txt` |
-| **Gemini** | `frontend/`, `frontend/Dockerfile` |
+| **Claude** | `docs/planning/`, `docker-compose.yml`, `.gitignore`, `CLAUDE.md`, `README.md`, `.cursorrules`, `.geminirules` |
+| **Cursor** | `backend/`, `backend/Dockerfile`, `backend/README.md`, `requirements.txt` |
+| **Gemini** | `frontend/`, `frontend/Dockerfile`, `frontend/README.md` |
 
 ---
 
@@ -60,18 +59,22 @@
 
 ---
 
-## 참조 문서 목록
+## 참조 문서
 
 ```
 docs/planning/
-├── TASK_PLAN.md            ← 현재 진행 상태 (최우선 확인)
-├── WORK_ORDER_CURSOR.md    ← Cursor 작업 지시서
-├── WORK_ORDER_GEMINI.md    ← Gemini 작업 지시서
-├── TECH_ARCHITECTURE.md    ← 기술 아키텍처
-├── AGENT_DESIGN.md         ← AI Agent 설계
-├── GAME_RULES.md           ← 게임 룰
-├── EVALUATION_REFLECTION.md← 평가 기준
+├── TASK_PLAN.md             ← 현재 진행 상태 (최우선 확인)
+├── WORK_ORDER_CURSOR.md     ← Cursor 작업 지시서
+├── WORK_ORDER_GEMINI.md     ← Gemini 작업 지시서
+├── TECH_ARCHITECTURE.md     ← 기술 아키텍처
+├── AGENT_DESIGN.md          ← AI Agent 설계
+├── GAME_RULES.md            ← 게임 룰
+├── EVALUATION_REFLECTION.md ← 평가 기준
 └── RAG_AND_STORAGE_DESIGN.md
+
+README.md               ← 전체 프로젝트 (Claude 관리)
+backend/README.md       ← 백엔드 안내 (Cursor 관리)
+frontend/README.md      ← 프론트엔드 안내 (Gemini 관리)
 ```
 
 ---
