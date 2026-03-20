@@ -1,8 +1,8 @@
 # ⚙️ Cursor 작업 지시서 (WORK_ORDER_CURSOR)
 
-> **대상**: Cursor AI — 백엔드 개발자  
-> **작성자**: Claude AI (기획자 + 인프라)  
-> **최종 업데이트**: 2026-03-19 (b6d9fe1 반영)
+> **대상**: Cursor AI — 백엔드 개발자
+> **작성자**: Claude AI (기획자 + 인프라)
+> **최종 업데이트**: 2026-03-20 (우선순위 재정리 + C-8 신규 추가)
 
 > 작업 전 반드시 `ROLE_CURSOR.md`와 이 문서를 먼저 읽을 것.  
 > **docker-compose.yml은 수정하지 않는다** — Claude 담당.
@@ -92,6 +92,29 @@ docker-compose에 `MAFIA_USE_REDIS_CHECKPOINTER=1` 설정되어 있으음 (Claud
 **폴백 제거**: Redis 연결 실패 시 로그를 남기고 실패 원인 보고.
 
 **참조**: `RAG_AND_STORAGE_DESIGN.md` §4 Redis 키 설계
+
+---
+
+### [C-8] 슈퍼바이저 재진단 루프 구현 (신규)
+
+**현황**: Phase 종료 후 슈퍼바이저가 상황을 재진단하는 `supervisor_replan` 노드가 미구현 상태.
+
+**목표**: `AGENT_DESIGN.md` §3.1 기반 구현
+```python
+# graph.py — supervisor_replan 노드 추가
+def supervisor_replan(state: GameState) -> GameState:
+    """각 Phase 종료 후 슈퍼바이저가 상황 재진단"""
+    # 1. 이번 라운드 발언/투표 패턴 분석
+    # 2. trust_score 재계산
+    # 3. 정보 갭 확인 (경찰 조사 여부, 의사 침묵 등)
+    # 4. 필요 시 새 directive 발행 → Redis 저장
+    ...
+
+# StateGraph에 노드 연결
+# day_chat → supervisor_replan → win_condition_checker → 다음 Phase
+```
+
+**참조**: `AGENT_DESIGN.md` §3.1 슈퍼바이저 재진단 루프
 
 ---
 

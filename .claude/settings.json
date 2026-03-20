@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(**)",
+      "Write(docs/planning/**)",
+      "Write(CLAUDE.md)",
+      "Write(README.md)",
+      "Write(.cursorrules)",
+      "Write(.geminirules)",
+      "Write(docker-compose.yml)",
+      "Write(.gitignore)",
+      "Write(.claude/settings.json)",
+      "Bash(git *)"
+    ],
+    "deny": [
+      "Write(backend/**)",
+      "Write(frontend/**)"
+    ]
+  },
+  "modelOverrides": {
+    "haiku":"claude-haiku-4-5-20251001",
+    "sonnet": "claude-sonnet-4-6",
+    "opus":"claude-opus-4-6"
+  }
+}

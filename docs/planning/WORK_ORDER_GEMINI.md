@@ -1,8 +1,8 @@
 # 🎨 Gemini 작업 지시서 (WORK_ORDER_GEMINI)
 
-> **대상**: Gemini AI — 프론트엔드 개발자  
-> **작성자**: Claude AI (기획자 + 인프라 엔지니어)  
-> **최종 업데이트**: 2026-03-19 (docker-compose 테스트 분석 반영)
+> **대상**: Gemini AI — 프론트엔드 개발자
+> **작성자**: Claude AI (기획자 + 인프라 엔지니어)
+> **최종 업데이트**: 2026-03-20 (우선순위 재정리)
 
 > 작업 전 `.geminirules` 읽기 → `WORK_ORDER_GEMINI.md` 확인 → 작업 시작.
 
