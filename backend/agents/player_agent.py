@@ -11,6 +11,7 @@ from backend.rag.retriever import SituationDescription, StrategyRetriever
 from backend.rag.store import RAGStore
 from backend.models.game import GameState, Player
 from backend.models.game import Role, Phase
+from backend.mcp.tools import MCPGameTools
 
 
 try:
@@ -48,10 +49,17 @@ class AgentOutput:
 class PlayerAgent:
     _rag_retriever: StrategyRetriever | None = None
 
-    def __init__(self, agent_id: str, persona: AgentPersona, player: Player) -> None:
+    def __init__(
+        self,
+        agent_id: str,
+        persona: AgentPersona,
+        player: Player,
+        mcp_tools: MCPGameTools | None = None,
+    ) -> None:
         self.agent_id = agent_id
         self.persona = persona
         self.player = player
+        self.mcp_tools = mcp_tools
 
     def _get_rag_retriever(self) -> StrategyRetriever | None:
         """
@@ -76,7 +84,17 @@ class PlayerAgent:
 
     async def run(self, agent_input: AgentInput) -> AgentOutput:
         # Phase 2 핵심: LLM 연동(키가 없으면 안전 폴백)
-        decision = await self._decide_with_llm(agent_input)
+        decision, executed_tools = await self._decide_with_llm(agent_input)
+
+        # Tool을 통해 GameState를 이미 갱신한 경우, 여기서는 output 필드를 비워
+        # AgentGraph의 수동 MCP 호출(중복 반영)을 막는다.
+        if executed_tools:
+            return AgentOutput(
+                speech=None,
+                action=None,
+                vote=None,
+                internal_notes=decision.reasoning,
+            )
 
         # Phase별로 허용된 필드만 남겨서 "엉뚱한 행동"이 섞이지 않게 가드.
         phase = agent_input.game_state.phase
@@ -113,7 +131,7 @@ class PlayerAgent:
             internal_notes=decision.reasoning,
         )
 
-    async def _decide_with_llm(self, agent_input: AgentInput) -> AgentDecision:
+    async def _decide_with_llm(self, agent_input: AgentInput) -> tuple[AgentDecision, bool]:
         phase = agent_input.game_state.phase
         game_state = agent_input.game_state
 
@@ -170,11 +188,11 @@ class PlayerAgent:
         use_llm_flag = os.getenv("MAFIA_USE_LLM", "1").strip().lower()
         llm_disabled = os.getenv("CI") is not None or use_llm_flag in {"0", "false", "no"}
         if llm_disabled:
-            return fallback()
+            return fallback(), False
 
         api_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
         if not api_key:
-            return fallback()
+            return fallback(), False
 
         # Lazy import to avoid hard failure when env doesn't have optional deps
         try:
@@ -182,18 +200,24 @@ class PlayerAgent:
             from langchain_core.messages import SystemMessage, HumanMessage
             from langchain_core.tools import tool
         except Exception:
-            return fallback()
+            return fallback(), False
 
         try:
             model_name = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4")
             llm = ChatAnthropic(model=model_name, temperature=0, api_key=api_key)
         except Exception:
-            return fallback()
+            return fallback(), False
 
-        # Phase별 간단한 출력 스키마 유도
-        system_prompt = (
+        # Phase별 간단한 출력 스키마 유도 (structured output 경로용)
+        structured_system_prompt = (
             "너는 AI 마피아 게임 에이전트다. 아래 지시에 따라 반드시 JSON 스키마로만 답한다."
             " 말투는 persona의 speech_style을 따른다."
+        )
+
+        # Tool 호출 경로용 프롬프트
+        tool_system_prompt = (
+            "너는 AI 마피아 게임 에이전트다. 반드시 제공된 tool을 호출해 게임 상태를 변경하라."
+            " tool 외의 일반 텍스트는 출력하지 말라."
         )
 
         directive_hint = agent_input.supervisor_directive or ""
@@ -275,75 +299,132 @@ class PlayerAgent:
             "task": phase_instruction,
         }
 
-        messages = [SystemMessage(content=system_prompt), HumanMessage(content=str(human_prompt))]
+        # structured output/ tool path에서 각각 messages를 따로 구성하므로 여기서는 미사용.
 
         try:
-            # C-2 호환 구현: bind_tools를 우선 시도해 LLM이 행동을 "도구 호출"로 선택하게 한다.
-            @tool
-            def send_chat(content: str) -> str:
-                """낮/밤 대화에서 발언 내용을 생성한다."""
-                return content
+            # C-2: MCP tool을 "실제로 실행"하는 경로를 우선 시도한다.
+            if self.mcp_tools is not None:
+                channel = "mafia_secret" if phase == Phase.NIGHT_MAFIA else "global"
 
-            @tool
-            def submit_vote(target_id: str) -> str:
-                """투표 대상 player_id를 선택한다."""
-                return target_id
+                # side-effect 실제 실행용 함수(툴 래퍼는 LLM 호출용 스키마만 제공)
+                def _send_chat(content: str) -> bool:
+                    self.mcp_tools.send_chat(
+                        agent_id=self.player.id,
+                        content=content,
+                        channel=channel,
+                    )
+                    return True
 
-            @tool
-            def use_ability(ability: str, target_id: str) -> str:
-                """능력 종류와 대상을 선택한다."""
-                return f"{ability}:{target_id}"
+                def _submit_vote(target_id: str) -> bool:
+                    self.mcp_tools.submit_vote(
+                        voter_id=self.player.id,
+                        target_id=target_id,
+                    )
+                    return True
 
-            tool_llm = llm.bind_tools([send_chat, submit_vote, use_ability])
-            tool_msg = await asyncio.to_thread(tool_llm.invoke, messages)
-            tool_calls = getattr(tool_msg, "tool_calls", []) or []
-            decision_from_tools = self._decision_from_tool_calls(tool_calls=tool_calls, phase=phase)
-            if decision_from_tools is not None:
-                return decision_from_tools
+                def _use_ability(ability: str, target_id: str) -> bool:
+                    self.mcp_tools.use_ability(
+                        agent_id=self.player.id,
+                        ability=ability,
+                        target_id=target_id,
+                    )
+                    return True
+
+                @tool
+                def send_chat(content: str) -> bool:
+                    """발언을 전송한다."""
+                    return _send_chat(content)
+
+                @tool
+                def submit_vote(target_id: str) -> bool:
+                    """투표를 제출한다."""
+                    return _submit_vote(target_id)
+
+                @tool
+                def use_ability(ability: str, target_id: str) -> bool:
+                    """능력을 사용한다."""
+                    return _use_ability(ability, target_id)
+
+                tool_llm = llm.bind_tools([send_chat, submit_vote, use_ability])
+                tool_messages = [SystemMessage(content=tool_system_prompt), HumanMessage(content=str(human_prompt))]
+                tool_msg = await asyncio.to_thread(tool_llm.invoke, tool_messages)
+                tool_calls = getattr(tool_msg, "tool_calls", []) or []
+
+                # C-2 핵심: LLM이 선택한 tool_calls를 실제로 실행해 GameState를 갱신한다.
+                executed_any = False
+                for tc in tool_calls:
+                    name = str(tc.get("name", ""))
+                    args = tc.get("args", {}) or {}
+                    if not isinstance(args, dict):
+                        continue
+                    try:
+                        if name == "send_chat" and "content" in args and phase in (Phase.DAY_CHAT, Phase.NIGHT_MAFIA, Phase.NIGHT_ABILITY):
+                            _send_chat(str(args["content"]).strip())
+                            executed_any = True
+                        elif name == "submit_vote" and "target_id" in args and phase in (Phase.DAY_VOTE, Phase.FINAL_VOTE):
+                            _submit_vote(str(args["target_id"]).strip())
+                            executed_any = True
+                        elif (
+                            name == "use_ability"
+                            and "ability" in args
+                            and "target_id" in args
+                            and phase == Phase.NIGHT_ABILITY
+                        ):
+                            _use_ability(str(args["ability"]).strip(), str(args["target_id"]).strip())
+                            executed_any = True
+                    except Exception:
+                        # 도구 실행 실패는 폴백으로 처리한다.
+                        executed_any = False
+                        break
+
+                decision = self._decision_from_tool_calls(tool_calls=tool_calls, phase=phase)
+                if decision is not None and executed_any:
+                    return decision, True
 
             structured_llm = llm.with_structured_output(AgentDecision)
-            # with_structured_output은 sync 호출이므로 async에서 to_thread로 감싼다.
+            messages = [SystemMessage(content=structured_system_prompt), HumanMessage(content=str(human_prompt))]
             decision: AgentDecision = await asyncio.to_thread(structured_llm.invoke, messages)
-            return decision
+            return decision, False
         except Exception:
-            return fallback()
+            return fallback(), False
 
     def _decision_from_tool_calls(self, tool_calls: list[dict], phase: Phase) -> AgentDecision | None:
         if not tool_calls:
             return None
-        first = tool_calls[0]
-        name = str(first.get("name", ""))
-        args = first.get("args", {}) or {}
-        if not isinstance(args, dict):
-            args = {}
 
-        if name == "send_chat" and phase in (Phase.DAY_CHAT, Phase.NIGHT_MAFIA):
-            content = str(args.get("content", "")).strip()
-            if content:
-                return AgentDecision(
-                    speech=content,
-                    reasoning="tool_call: send_chat",
-                    confidence=0.7,
-                )
-        if name == "submit_vote" and phase in (Phase.DAY_VOTE, Phase.FINAL_VOTE):
-            target_id = str(args.get("target_id", "")).strip()
-            if target_id:
-                return AgentDecision(
-                    vote_target=target_id,
-                    reasoning="tool_call: submit_vote",
-                    confidence=0.7,
-                )
-        if name == "use_ability" and phase == Phase.NIGHT_ABILITY:
-            ability = str(args.get("ability", "")).strip()
-            target_id = str(args.get("target_id", "")).strip()
-            if ability and target_id:
-                return AgentDecision(
-                    ability=ability,
-                    ability_target=target_id,
-                    reasoning="tool_call: use_ability",
-                    confidence=0.7,
-                )
-        return None
+        speech: str | None = None
+        vote_target: str | None = None
+        ability: str | None = None
+        ability_target: str | None = None
+
+        tool_names: list[str] = []
+        for tc in tool_calls:
+            name = str(tc.get("name", ""))
+            tool_names.append(name)
+            args = tc.get("args", {}) or {}
+            if not isinstance(args, dict):
+                continue
+
+            if name == "send_chat" and phase in (Phase.DAY_CHAT, Phase.NIGHT_MAFIA):
+                content = str(args.get("content", "")).strip()
+                if content:
+                    speech = content
+            elif name == "submit_vote" and phase in (Phase.DAY_VOTE, Phase.FINAL_VOTE):
+                target_id = str(args.get("target_id", "")).strip()
+                if target_id:
+                    vote_target = target_id
+            elif name == "use_ability" and phase == Phase.NIGHT_ABILITY:
+                ability = str(args.get("ability", "")).strip() or ability
+                ability_target = str(args.get("target_id", "")).strip() or ability_target
+
+        return AgentDecision(
+            speech=speech,
+            vote_target=vote_target,
+            ability=ability,
+            ability_target=ability_target,
+            reasoning=f"tool_call: {', '.join(tool_names)}",
+            confidence=0.7,
+        )
 
     def _allowed_ability_for_role(self, role: Role) -> list[str]:
         # GAME_RULES 기준 최소 매핑 (추후 더 정교화)

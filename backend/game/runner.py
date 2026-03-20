@@ -43,7 +43,7 @@ class GameRunner:
             return
 
         pool = AgentPool()
-        pool.create_agents(players=ai_players)
+        pool.create_agents(players=ai_players, engine=self.engine)
         agents = {a.agent_id: a for a in pool.all_agents()}
         self.agent_graph = AgentGraph(engine=self.engine, agents=agents)
         self._agent_call_ready = True
