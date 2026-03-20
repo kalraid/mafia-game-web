@@ -153,6 +153,49 @@ def mafia_attack(ctx: RoleAbilityContext) -> GameState:
 
 ---
 
+### [C-9] RAG 지식문서 ChromaDB 인덱싱 (신규)
+
+**배경**: Claude가 `docs/rag_knowledge/` 아래 RAG 지식 문서 20개 작성 완료.
+이 문서들을 ChromaDB에 인덱싱해서 Agent가 `search_strategy_rag_tool`로 검색할 수 있게 해야 함.
+
+**파일 구조**:
+```
+docs/rag_knowledge/
+├── strategies/      # 7개: 직업별 전략
+├── speech_patterns/ # 6개: 발언 스타일별 예시
+├── situations/      # 6개: 상황별 대응
+└── rules/           # 2개: 룰 문서 (Agent 조회용)
+```
+
+**작업 목표**:
+```python
+# backend/rag/store.py 또는 indexer.py
+# docs/rag_knowledge/ 아래 모든 .md 파일을 읽어 ChromaDB에 인덱싱
+
+import os
+from pathlib import Path
+
+def index_knowledge_base(knowledge_dir: str = "docs/rag_knowledge"):
+    """docs/rag_knowledge/ 아래 .md 파일을 ChromaDB에 인덱싱"""
+    for md_file in Path(knowledge_dir).rglob("*.md"):
+        content = md_file.read_text(encoding="utf-8")
+        metadata = {
+            "category": md_file.parent.name,   # strategies, speech_patterns, situations, rules
+            "filename": md_file.stem,
+            "filepath": str(md_file),
+        }
+        # 파일 상단 frontmatter에서 role, team, speech_style 등 메타데이터 파싱
+        # ChromaDB collection.add(documents=[content], metadatas=[metadata])
+```
+
+**메타데이터 파싱**: 각 .md 파일 상단에 `category`, `role`, `team`, `speech_style` 등이 있으니 파싱해서 ChromaDB 메타데이터에 포함.
+
+**검색 필터 연동**: `RAG_AND_STORAGE_DESIGN.md` §3.2 메타데이터 필터 설계 참조.
+
+**참조**: `docs/rag_knowledge/` 전체, `RAG_AND_STORAGE_DESIGN.md` §3, `AGENT_DESIGN.md` §5
+
+---
+
 ## 📢 인프라 보고 방법
 
 docker-compose.yml 변경이 필요하면 **직접 수정 말고** Claude에게 보고:

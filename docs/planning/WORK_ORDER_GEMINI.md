@@ -103,6 +103,49 @@ def draw_game():
 
 ---
 
+## 🆕 신규 작업 (2026-03-20 추가)
+
+### [G-12] RAG 지식문서 ChromaDB 인덱싱
+
+**배경**: Claude가 `docs/rag_knowledge/` 아래 RAG 지식 문서 20개를 작성 완료.
+Cursor(백엔드)가 ChromaDB에 인덱싱하기 전까지, 프론트엔드에서 해당 문서 경로를 참조할 수 있도록 준비.
+
+**파일 구조**:
+```
+docs/rag_knowledge/
+├── strategies/      # mafia_basic, mafia_advanced, citizen_deduction,
+│                    # detective_tactics, doctor_protection, jester_tactics, spy_survival
+├── speech_patterns/ # aggressive, cautious, logical, emotional, deflection, defense
+├── situations/      # early_game, mid_game, endgame_citizen, endgame_mafia,
+│                    # ratio_analysis, last_mafia
+└── rules/           # game_rules, role_abilities
+```
+
+**Gemini 작업 내용**:
+1. **RAG 상태 표시 위젯** — `frontend/components/status_panel.py` 또는 사이드바에 추가
+   - 현재 게임에서 RAG 검색이 활성화됐는지 여부 표시
+   - 백엔드 `/health` 엔드포인트에 RAG 상태 필드가 있다면 연동
+
+2. **디버그 패널 (개발용)** — Streamlit `st.expander("RAG 컨텍스트 보기")` 형태로
+   - 게임 상태 업데이트 이벤트에 `rag_context` 필드가 포함되면 표시
+   - WebSocket `game_state_update` 이벤트의 payload에 `rag_context` 키가 있으면 펼쳐서 보여주기
+   - 없으면 "RAG 컨텍스트 없음" 표시
+
+```python
+# 예시 (frontend/components/status_panel.py 또는 game.py)
+with st.expander("🔍 RAG 컨텍스트 (디버그)"):
+    rag_ctx = game_state.get("rag_context", [])
+    if rag_ctx:
+        for i, ctx in enumerate(rag_ctx):
+            st.markdown(f"**{i+1}.** {ctx}")
+    else:
+        st.caption("RAG 컨텍스트 없음")
+```
+
+**참조**: `docs/rag_knowledge/` 전체, `TECH_ARCHITECTURE.md` §3.3 WebSocket 이벤트
+
+---
+
 ## 📢 인프라 보고
 
 ```
