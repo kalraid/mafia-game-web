@@ -174,10 +174,40 @@ def draw_status_panel():
                     handle_request_error(e, "기권 처리 실패")
 
         elif phase == "final_speech":
-             if st.button("처형 찬성"):
-                pass
-             if st.button("처형 반대"):
-                pass
+            execution_target = st.session_state.get("execution_target")
+            if execution_target:
+                st.write(f"**{execution_target}**의 최후 변론입니다. 처형 여부를 투표하세요.")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("👍 처형 찬성", disabled=not execution_target):
+                    try:
+                        my_name = st.session_state.get("player_name", "UnknownPlayer")
+                        game_id = st.session_state.get("game_id", "test_game")
+                        
+                        response = requests.post(
+                            f"{BACKEND_URL}/game/{game_id}/vote",
+                            json={"voter": my_name, "voted_for": execution_target},
+                        )
+                        response.raise_for_status()
+                        st.toast(f"✅ {execution_target} 처형에 찬성했습니다.", icon="👍")
+                    except requests.exceptions.RequestException as e:
+                        handle_request_error(e, "투표 실패")
+
+            with col2:
+                if st.button("👎 처형 반대", disabled=not execution_target):
+                    try:
+                        my_name = st.session_state.get("player_name", "UnknownPlayer")
+                        game_id = st.session_state.get("game_id", "test_game")
+                        
+                        response = requests.post(
+                            f"{BACKEND_URL}/game/{game_id}/vote",
+                            json={"voter": my_name, "voted_for": None},
+                        )
+                        response.raise_for_status()
+                        st.toast(f"✅ {execution_target} 처형에 반대했습니다.", icon="👎")
+                    except requests.exceptions.RequestException as e:
+                        handle_request_error(e, "기권 처리 실패")
         elif phase == "night":
             my_role = st.session_state.get("my_role", "citizen")
             
