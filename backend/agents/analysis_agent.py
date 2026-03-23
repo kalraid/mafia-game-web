@@ -4,9 +4,6 @@ import asyncio
 import os
 from typing import Any, Protocol, TypedDict
 
-from backend.rag.store import RAGStore
-
-
 class _RAGLike(Protocol):
     def similarity_search(self, query: str, k: int = 3) -> list[dict]: ...
 
@@ -27,9 +24,11 @@ class GameInsightAgent:
 
     - Redis Set `mafia:game_analysis:processed` 로 동일 game_id 중복 분석 방지
     - LangGraph StateGraph: gate(처리 여부) → analyze(LLM+tool) → mark(성공 시 SADD)
+    - `mafia:game_archive:{game_id}` 키를 SCAN으로 모아 미분석분만 배치 처리 가능 (`analyze_pending`)
     """
 
     PROCESSED_SET_KEY = "mafia:game_analysis:processed"
+    ARCHIVE_KEY_PREFIX = "mafia:game_archive:"
 
     def __init__(self, redis_client: Any, rag_store: _RAGLike) -> None:
         self.redis = redis_client
@@ -84,6 +83,76 @@ class GameInsightAgent:
 
         out: InsightGraphState = await self._compiled_graph.ainvoke({"game_id": game_id})
         return bool(out.get("success"))
+
+    def iter_pending_game_ids(self) -> list[str]:
+        """
+        Redis에 저장된 아카이브 키(`mafia:game_archive:*`)를 SCAN으로 나열하고,
+        `mafia:game_analysis:processed` 에 없는 game_id만 반환한다.
+        """
+        prefix = self.ARCHIVE_KEY_PREFIX
+        match = f"{prefix}*"
+        archive_ids: set[str] = set()
+
+        def _decode_key(raw: object) -> str:
+            if isinstance(raw, (bytes, bytearray)):
+                return raw.decode("utf-8", errors="replace")
+            return str(raw)
+
+        scan_iter = getattr(self.redis, "scan_iter", None)
+        if not callable(scan_iter):
+            return []
+
+        for raw_key in scan_iter(match=match):
+            k = _decode_key(raw_key)
+            if not k.startswith(prefix):
+                continue
+            gid = k[len(prefix) :]
+            if gid:
+                archive_ids.add(gid)
+
+        processed_raw = self.redis.smembers(self.PROCESSED_SET_KEY)
+        processed: set[str] = set()
+        if processed_raw:
+            for p in processed_raw:
+                if isinstance(p, (bytes, bytearray)):
+                    processed.add(p.decode("utf-8", errors="replace"))
+                else:
+                    processed.add(str(p))
+
+        pending = archive_ids - processed
+        return sorted(pending)
+
+    async def analyze_pending(self, limit: int | None = None) -> list[str]:
+        """
+        미분석 아카이브에 대해 `analyze_game`을 순차 실행한다.
+        성공한 game_id만 목록으로 반환한다.
+
+        - `limit`: 직접 상한. None이면 환경변수 `MAFIA_INSIGHT_PENDING_LIMIT`(정수) 적용,
+          그것도 없으면 제한 없음.
+        """
+        use_llm_flag = os.getenv("MAFIA_USE_LLM", "1").strip().lower()
+        llm_disabled = os.getenv("CI") is not None or use_llm_flag in {"0", "false", "no"}
+        api_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
+        if llm_disabled or not api_key:
+            return []
+
+        pending = self.iter_pending_game_ids()
+        eff_limit = limit
+        if eff_limit is None:
+            raw = os.getenv("MAFIA_INSIGHT_PENDING_LIMIT", "").strip()
+            if raw:
+                try:
+                    eff_limit = int(raw)
+                except ValueError:
+                    eff_limit = None
+        if eff_limit is not None and eff_limit >= 0:
+            pending = pending[: eff_limit]
+
+        analyzed_ok: list[str] = []
+        for gid in pending:
+            if await self.analyze_game(gid):
+                analyzed_ok.append(gid)
+        return analyzed_ok
 
     async def _run_llm_analysis(self, game_id: str) -> bool:
         from langchain_anthropic import ChatAnthropic
