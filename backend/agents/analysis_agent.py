@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import os
-from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Any, Protocol, TypedDict
 
 from backend.rag.store import RAGStore
 
@@ -14,22 +13,64 @@ class _RAGLike(Protocol):
     def add_documents(self, texts: Any, metadatas: Any) -> None: ...
 
 
-@dataclass
-class _ToolResult:
-    content: str
+class InsightGraphState(TypedDict, total=False):
+    """C-10: LangGraph 서브그래프 상태 (gate → analyze → mark)."""
+
+    game_id: str
+    skipped: bool
+    success: bool
 
 
 class GameInsightAgent:
     """
-    게임 종료 시 기록(phase 흐름/투표/채팅)을 분석해 런타임 문서를 생성한다.
+    게임 종료 시 기록을 분석해 런타임 RAG 문서를 생성한다.
 
-    MVP 성격으로, LLM 호출이 비활성(ANTHROPIC_API_KEY 없음/CI/MAFIA_USE_LLM=0)인 경우
-    아무 것도 하지 않고 False를 반환한다.
+    - Redis Set `mafia:game_analysis:processed` 로 동일 game_id 중복 분석 방지
+    - LangGraph StateGraph: gate(처리 여부) → analyze(LLM+tool) → mark(성공 시 SADD)
     """
+
+    PROCESSED_SET_KEY = "mafia:game_analysis:processed"
 
     def __init__(self, redis_client: Any, rag_store: _RAGLike) -> None:
         self.redis = redis_client
         self.rag_store = rag_store
+        self._compiled_graph: Any | None = None
+
+    def _build_graph(self) -> Any:
+        from langgraph.graph import END, StateGraph
+
+        redis = self.redis
+        processed_key = self.PROCESSED_SET_KEY
+        agent = self
+
+        async def node_gate(state: InsightGraphState) -> InsightGraphState:
+            gid = str(state.get("game_id") or "")
+            is_member = await asyncio.to_thread(redis.sismember, processed_key, gid)
+            return {**state, "skipped": bool(is_member), "success": False}
+
+        async def node_analyze(state: InsightGraphState) -> InsightGraphState:
+            if state.get("skipped"):
+                return {**state, "success": False}
+            gid = str(state.get("game_id") or "")
+            ok = await agent._run_llm_analysis(gid)
+            return {**state, "success": ok}
+
+        async def node_mark(state: InsightGraphState) -> InsightGraphState:
+            if state.get("skipped") or not state.get("success"):
+                return state
+            gid = str(state.get("game_id") or "")
+            await asyncio.to_thread(redis.sadd, processed_key, gid)
+            return state
+
+        graph: StateGraph = StateGraph(InsightGraphState)
+        graph.add_node("gate", node_gate)
+        graph.add_node("analyze", node_analyze)
+        graph.add_node("mark", node_mark)
+        graph.set_entry_point("gate")
+        graph.add_edge("gate", "analyze")
+        graph.add_edge("analyze", "mark")
+        graph.add_edge("mark", END)
+        return graph.compile()
 
     async def analyze_game(self, game_id: str) -> bool:
         use_llm_flag = os.getenv("MAFIA_USE_LLM", "1").strip().lower()
@@ -38,13 +79,19 @@ class GameInsightAgent:
         if llm_disabled or not api_key:
             return False
 
-        # Lazy import: 테스트/CI에서 임포트만으로 의존성이 깨지는 것을 방지
+        if self._compiled_graph is None:
+            self._compiled_graph = self._build_graph()
+
+        out: InsightGraphState = await self._compiled_graph.ainvoke({"game_id": game_id})
+        return bool(out.get("success"))
+
+    async def _run_llm_analysis(self, game_id: str) -> bool:
         from langchain_anthropic import ChatAnthropic
         from langchain_core.messages import HumanMessage, SystemMessage
         from langchain_core.tools import tool
 
         model_name = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4")
-        llm = ChatAnthropic(model=model_name, temperature=0, api_key=api_key)
+        llm = ChatAnthropic(model=model_name, temperature=0, api_key=os.getenv("ANTHROPIC_API_KEY", "").strip())
 
         @tool
         def read_game_record(game_id: str) -> str:
@@ -59,7 +106,6 @@ class GameInsightAgent:
         def search_existing_rag(query: str) -> str:
             """기존 RAG에서 유사 문서를 검색해 중복 생성을 방지한다."""
             docs = self.rag_store.similarity_search(query, k=3)
-            # RAGStore는 {"text":..., "metadata":...} 형태를 반환한다.
             texts = [d.get("text") or d.get("page_content") or "" for d in docs]
             texts = [t for t in texts if t.strip()]
             return "\n\n".join(texts) if texts else "유사 문서 없음"
@@ -72,8 +118,8 @@ class GameInsightAgent:
                 "title": title,
                 "tags": tags,
                 "source": "runtime",
+                "source_game_id": game_id,
             }
-            # RAGStore.add_documents(texts, metadatas) 인터페이스를 따른다.
             self.rag_store.add_documents(texts=[content], metadatas=[metadata])
             return f"문서 추가 완료: {title}"
 
@@ -92,8 +138,6 @@ class GameInsightAgent:
         if not tool_calls:
             return False
 
-        # LangGraph ToolNode를 MVP로 대신해, tool_calls를 수동 실행한다.
-        # (PlayerAgent와 동일한 수동 실행 방식)
         tool_name_map = {
             "read_game_record": read_game_record,
             "search_existing_rag": search_existing_rag,
@@ -108,11 +152,15 @@ class GameInsightAgent:
             if not isinstance(args, dict):
                 continue
             try:
-                tool_name_map[name](**args)  # tool은 sync로 실행
+                fn = tool_name_map[name]
+                # @tool 로 감싼 Runnable은 invoke(dict) 사용 (직접 **args 호출은 실패할 수 있음)
+                inv = getattr(fn, "invoke", None)
+                if callable(inv):
+                    inv(args)
+                else:
+                    fn(**args)
                 executed_any = True
             except Exception:
-                # 하나 실패하더라도 나머지는 계속 시도(최소한의 견고성)
                 continue
 
         return executed_any
-

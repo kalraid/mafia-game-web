@@ -193,7 +193,8 @@ class RAGStore:
             category = parsed_meta.get("category") or folder_category
             meta = {
                 "category": category,
-                "source": "disk",
+                # WORK_ORDER / RAG 설계: 정적 지식은 static, 런타임 인사이트는 runtime
+                "source": "static",
                 "file": fp.name,
                 "knowledge_root": str(root),
             }
