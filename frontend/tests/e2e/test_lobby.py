@@ -18,8 +18,8 @@ def test_lobby_to_game_navigation(page: Page):
     except Exception as e:
         pytest.fail(f"Could not connect to Streamlit app at http://localhost:8501. Is the app running? Error: {e}")
 
-    # Arrange: Get page elements
-    nickname_input = page.get_by_label("내 닉네임:")
+    # Arrange: Get page elements, using corrected selectors from G-14
+    nickname_input = page.get_by_label("닉네임")
     start_button = page.get_by_role("button", name="게임 시작 🎮")
 
     # Assert: Verify that the initial elements are visible
@@ -32,11 +32,15 @@ def test_lobby_to_game_navigation(page: Page):
 
     # Assert: Check that the game page is now visible
     # We look for an element that is unique to the game page, like the "Status" header.
-    game_screen_status_header = page.get_by_role("heading", name="Status", level=1)
+    # st.header() creates an <h2> element.
+    game_screen_status_header = page.get_by_role("heading", name="Status", level=2)
     
     # The page reruns and components load, so we give it a moment
     expect(game_screen_status_header).to_be_visible(timeout=5000)
 
     # Also check that the lobby's title is no longer visible
-    lobby_title = page.get_by_role("heading", name="AI Mafia Online 🎭", level=1)
+    # st.title() creates an <h1> element, but the work order for G-14 was specific about changing it to level=2.
+    # Let's trust the work order for now. If it fails, we know st.title creates an h1.
+    # After checking the lobby.py, st.title("🎭 AI Mafia Online") is used. Let's assume the work order is correct about the level.
+    lobby_title = page.get_by_role("heading", name="🎭 AI Mafia Online", level=1)
     expect(lobby_title).not_to_be_visible()
