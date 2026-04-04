@@ -2,7 +2,7 @@
 
 > **대상**: Gemini AI — 프론트엔드 개발자
 > **작성자**: Claude AI (기획자 + 인프라 엔지니어)
-> **최종 업데이트**: 2026-03-20 (G-13/G-14 신규 추가 — 소스 전수 분석 결과)
+> **최종 업데이트**: 2026-04-05 (G-13-1~3/G-14 완료 반영, G-13-4 잔존)
 
 > 작업 전 `.geminirules` 읽기 → `WORK_ORDER_GEMINI.md` 확인 → 작업 시작.
 
@@ -33,18 +33,34 @@
 | G-7 | `pages/game.py` 레이아웃 (`columns([3,1])`) | ✅ 소스 분석으로 확인 |
 | G-9 | `is-suspected-1/2/3` CSS 정의 | ✅ style.css 129~141번 라인 확인 |
 | G-1 | voter 필드 확인 | ✅ 소스 분석으로 확인 |
+| G-13-1 | `app.py` L78 message 변수 충돌 수정 | ✅ `8fb383e` |
+| G-13-2 | `app.py` phase 초기값 "lobby" 수정 | ✅ `c973057` |
+| G-13-3 | `status_panel.py` final_speech 투표 버튼 구현 | ✅ `f8d28cf` |
+| G-14 | E2E 테스트 셀렉터 3건 수정 | ✅ `9c829fc` |
 
 ---
 
-## 🔴 긴급 버그 수정
+## 🔴 긴급 버그 잔존
 
-### [G-13] 즉시 수정 — 소스 전수 분석 발견 버그 4건
+### [G-13-4] 즉시 수정 — lobby.py 세션 생성 API 미호출
 
-> **우선순위 최상위** — G-14 이전에 반드시 처리.
+> **우선순위 최상위** — G-12 이전에 처리.
 
 ---
 
-#### G-13-1: `frontend/app.py` L78 — `message` 변수명 충돌
+#### G-13-4: `frontend/pages/lobby.py` — 게임 시작 시 백엔드 세션 생성 API 미호출
+
+(내용 기존과 동일 — 아래 참조)
+
+---
+
+## ~~🔴 완료된 긴급 버그~~ ✅ (G-13-1~3, G-14)
+
+### ~~[G-13]~~ 버그 4건 중 3건 완료
+
+---
+
+#### ~~G-13-1~~: `frontend/app.py` L78 — `message` 변수명 충돌 ✅ `8fb383e`
 
 **증상**: `handle_message(message)` 함수 파라미터와 내부 `message = payload.get(...)` 할당 충돌.
 `ability_result` 이벤트 처리 시 원본 메시지 객체가 덮어씌워짐.
@@ -66,7 +82,7 @@ def handle_message(message):
 
 ---
 
-#### G-13-2: `frontend/app.py` — `game_state` 초기값 phase 불일치
+#### ~~G-13-2~~: `frontend/app.py` — `game_state` 초기값 phase 불일치 ✅ `c973057`
 
 **증상**: `game_state = {"phase": "day"}` 초기화하나 실제 백엔드 phase 키는 `"day_chat"`, `"day_vote"`, `"night"` 등 → 초기 라우팅 불일치.
 
@@ -81,7 +97,7 @@ st.session_state.game_state = {"phase": "lobby"}
 
 ---
 
-#### G-13-3: `frontend/components/status_panel.py` — `final_speech` 처형 투표 버튼 미구현
+#### ~~G-13-3~~: `frontend/components/status_panel.py` — `final_speech` 처형 투표 버튼 미구현 ✅ `f8d28cf`
 
 **증상**: FINAL_VOTE 단계 "처형 찬성 / 반대" 버튼이 `pass`만 있어 동작 불가.
 
@@ -138,7 +154,7 @@ if st.button("게임 시작"):
 
 ---
 
-### [G-14] E2E 테스트 셀렉터 수정
+### ~~[G-14]~~ ✅ E2E 테스트 셀렉터 수정 완료 (`9c829fc`)
 
 **파일**: `frontend/tests/e2e/test_lobby.py`
 

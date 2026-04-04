@@ -2,7 +2,7 @@
 
 > **대상**: Cursor AI — 백엔드 개발자
 > **작성자**: Claude AI (기획자 + 인프라)
-> **최종 업데이트**: 2026-03-20 (C-11 즉시 버그 수정 신규 추가 — 소스 전수 분석 결과)
+> **최종 업데이트**: 2026-04-05 (C-2/7/8/9/10/11 완료 반영)
 
 > 작업 전 반드시 `ROLE_CURSOR.md`와 이 문서를 먼저 읽을 것.  
 > **docker-compose.yml은 수정하지 않는다** — Claude 담당.
@@ -28,23 +28,28 @@
 | C-3 | 슈퍼바이저 전략 로직 (trust_score + 우선순위) | `af1a977` |
 | C-4 | 마피아 밤 채널 WebSocket 필터링 | `b6d9fe1` |
 | C-6 | 발언 타이밍 딜레이 (`_speech_delay()`) | `af1a977` |
-| — | NIGHT_MAFIA 라운드 + mafia_secret 채널 | `af1a977` |
-| — | Phase 가드 (허용 행동만 반환) | `af1a977` |
-| — | `_AgentCallState` 직렬화 개선 (`_invoke_agent()` 헬퍼) | `b6d9fe1` |
-| — | `langgraph-checkpoint-redis` requirements 추가 | `b6d9fe1` |
-| — | `backend/Dockerfile` 경로 이동 (루트→backend/) | `b6d9fe1` |
+| C-2 | bind_tools + ToolNode ReAct 루프 완성 | `91150e0` |
+| C-7 | `game/roles.py` 능력 로직 (detective/doctor/mafia/killer) | `3af6d3c` |
+| C-8 | 슈퍼바이저 재진단 루프 (`supervisor_replan`) | `96becae` |
+| C-9 | `docs/rag_knowledge` ChromaDB 인덱싱 (frontmatter 파싱) | `c77e002` |
+| C-11-1 | `snapshot.py` FINAL_VOTE phase 문자열 수정 | `5f45e53` |
+| C-11-2 | `mcp/tools.py` submit_vote 파라미터 통일 | `345831e` |
+| C-11-3 | `roles.py` FORTUNE_TELLER/SPY handler 추가 | `1a79641` |
+| C-10-1 | `game/archiver.py` GameArchiver Redis archive | `e531163` |
+| C-10-2 | `agents/analysis_agent.py` GameInsightAgent LangGraph | `61a4ff4` |
+| C-10-3 | `game/runner.py` 게임 종료 hook 추가 | `7f080d4` |
+| C-10-4 | `rag/store.py` source="runtime" 메타데이터 충돌 방지 | `387ea8a` |
+| C-10 | analyze_pending SCAN 배치 | `d691e80` |
 
 ---
 
-## 🔴 긴급 버그 수정
+## ~~🔴 긴급 버그 수정~~ ✅ 완료
 
-### [C-11] 즉시 수정 — 소스 전수 분석 발견 버그 3건
-
-> **우선순위 최상위** — C-2 이전에 반드시 처리.
+### ~~[C-11]~~ ✅ 완료 — 버그 3건 모두 수정 (`5f45e53`, `345831e`, `1a79641`)
 
 ---
 
-#### C-11-1: `backend/game/snapshot.py` — FINAL_VOTE phase 문자열 오류
+#### ~~C-11-1~~: `backend/game/snapshot.py` — FINAL_VOTE phase 문자열 오류
 
 **증상**: 프론트엔드가 FINAL_VOTE 단계에서 잘못된 phase값을 받아 UI 라우팅 오류.
 
@@ -124,9 +129,9 @@ ROLE_ABILITIES = {
 
 ---
 
-## 🔄 진행 중 작업
+## ~~🔄 진행 중 작업~~ ✅ 완료 (C-2, C-7, C-8, C-9, C-10)
 
-### [C-2] MCP bind_tools + ToolNode 연동 — 다음 단계
+### ~~[C-2]~~ ✅ MCP bind_tools + ToolNode 연동 완료 (`91150e0`)
 
 **현황**: `player_agent.py`에 `bind_tools` 적용하여 tool_calls 있으면 `_decision_from_tool_calls()`로 처리함.  
 하지만 **`graph.py`에서 MCPGameTools 직접 호출(수동 파이프라인)은 여전히 유지 중**.  
@@ -164,6 +169,8 @@ graph.py에서 ToolNode 루프를 연결하는 것이 목표.**
 
 ---
 
+## 🔄 현재 작업
+
 ### [C-5] Redis Checkpointer 전면 연동
 
 **현황**: `MAFIA_USE_REDIS_CHECKPOINTER=1`일 때만 RedisSaver 사용, 실패 시 일반 compile 폴백.  
@@ -183,7 +190,7 @@ docker-compose에 `MAFIA_USE_REDIS_CHECKPOINTER=1` 설정되어 있으음 (Claud
 
 ---
 
-### [C-8] 슈퍼바이저 재진단 루프 구현 (신규)
+### ~~[C-8]~~ ✅ 슈퍼바이저 재진단 루프 완료 (`96becae`)
 
 **현황**: Phase 종료 후 슈퍼바이저가 상황을 재진단하는 `supervisor_replan` 노드가 미구현 상태.
 
@@ -206,9 +213,9 @@ def supervisor_replan(state: GameState) -> GameState:
 
 ---
 
-## 🟡 중간 우선순위 작업
+## ~~🟡 중간 우선순위 작업~~ ✅ 완료 (C-7, C-9, C-10)
 
-### [C-7] game/roles.py 능력 로직 구현
+### ~~[C-7]~~ ✅ game/roles.py 능력 로직 완료 (`3af6d3c`)
 
 **현황**: `detective_investigate`, `doctor_protect`, `mafia_attack`, `killer_piercing_attack` 함수가 시그니처만 있고 실제 로직 없음.
 
@@ -241,7 +248,7 @@ def mafia_attack(ctx: RoleAbilityContext) -> GameState:
 
 ---
 
-### [C-9] RAG 지식문서 ChromaDB 인덱싱 (신규)
+### ~~[C-9]~~ ✅ RAG 지식문서 ChromaDB 인덱싱 완료 (`c77e002`)
 
 **배경**: Claude가 `docs/rag_knowledge/` 아래 RAG 지식 문서 20개 작성 완료.
 이 문서들을 ChromaDB에 인덱싱해서 Agent가 `search_strategy_rag_tool`로 검색할 수 있게 해야 함.
@@ -284,7 +291,7 @@ def index_knowledge_base(knowledge_dir: str = "docs/rag_knowledge"):
 
 ---
 
-### [C-10] GameInsightAgent — 게임 결과 분석 → RAG 자동 업데이트 (신규)
+### ~~[C-10]~~ ✅ GameInsightAgent 완료 (`e531163`~`d691e80`)
 
 **배경**: 현재 RAG 지식베이스는 정적 `.md` 파일 20개로만 구성됨.
 게임이 진행될수록 실전 전략·발언·투표 패턴을 자동 학습해 Agent 품질을 지속 향상시키는 파이프라인이 필요.
