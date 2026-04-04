@@ -160,3 +160,5 @@ mafia-game-web/
 - [게임 룰](docs/planning/GAME_RULES.md)
 - [AI Agent 설계](docs/planning/AGENT_DESIGN.md)
 - [작업 계획](docs/planning/TASK_PLAN.md)
+
+2026-04-05
