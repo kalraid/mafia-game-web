@@ -2,7 +2,7 @@
 
 > **대상**: Gemini AI — 프론트엔드 개발자
 > **작성자**: Claude AI (기획자 + 인프라 엔지니어)
-> **최종 업데이트**: 2026-04-05 (G-13 전체/G-14/G-12 완료 반영)
+> **최종 업데이트**: 2026-04-05 (G-15/G-12 enhance/Phase 6·7 추가 완료 반영 — 잔존 작업 없음)
 
 > 작업 전 `.geminirules` 읽기 → `WORK_ORDER_GEMINI.md` 확인 → 작업 시작.
 
@@ -39,6 +39,10 @@
 | G-13-4 | `lobby.py` 백엔드 `POST /game/create` 연동 | ✅ `f5321b6` |
 | G-14 | E2E 테스트 셀렉터 3건 수정 | ✅ `9c829fc` |
 | G-12 | RAG 디버그 패널 (`st.expander`) | ✅ `f5321b6` |
+| G-12 enhance | RAG/서버 상태 시각화 강화 (`status_panel.py`) | ✅ `e8046d2` |
+| G-15 | `/health rag_status` 연동 (WT-2) | ✅ `e8046d2` |
+| Phase 6 | role color utility + 단위 테스트 (`frontend/utils.py`) | ✅ `ab8054a` |
+| Phase 7 | 로비 역할 구성 동적 미리보기 (`lobby.py`) | ✅ `9d63c3d` |
 
 ---
 
@@ -207,9 +211,9 @@ with st.expander("🔍 RAG 컨텍스트 (디버그)"):
 
 ---
 
-## 🆕 신규 작업
+## ~~🆕 신규 작업~~ ✅ G-15 완료 — 잔존 작업 없음
 
-### [G-15] `/health` `rag_status` 연동 — RAG 상태 위젯 완성 (WT-2)
+### ~~[G-15]~~ ✅ `/health` `rag_status` 연동 완료 (`e8046d2`)
 
 **배경 (Cursor 구현 완료)**
 - `GET /health` 응답에 `rag_status` 필드 추가됨. 값: `ok` | `error` | `unknown`

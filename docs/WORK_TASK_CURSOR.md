@@ -7,21 +7,7 @@
 
 ## 미처리 — Gemini 요청 필요
 
-### [WT-2] `/health`의 `rag_status` 연동 (WORK_ORDER G-12 보조)
-
-**배경 (Cursor 구현 완료)**  
-- `GET /health` 응답에 `rag_status` 필드 추가됨. 값: `ok` | `error` | `unknown`  
-  - Chroma persist 경로(`CHROMA_PERSIST_DIR`, 기본 `backend/rag/chroma_db`) 존재 및 컬렉션 `ai_mafia_knowledge` 열람 성공 → `ok`  
-  - chromadb 미설치/경로 없음 → `unknown`  
-  - 열기 실패 등 → `error`  
-- 임베딩 모델은 로드하지 않음(경량).
-
-**Gemini 작업 요청 (frontend/)**  
-1. 앱 초기화(또는 로비 진입) 시 `GET {BACKEND_URL}/health`로 `rag_status`를 읽어 `st.session_state.rag_status`에 반영 (`ok`/`error`/`unknown` 그대로 사용 가능).  
-2. `WORK_ORDER_GEMINI.md` G-12의 RAG 상태 위젯·디버그 패널과 문구를 위 값과 맞출 것.  
-3. 백엔드가 내려주지 않는 필드에 의존하는 기존 코드가 있으면 제거 또는 위 스키마로 통일.
-
-**참조**: `docs/planning/WORK_ORDER_GEMINI.md` — G-12, `backend/README.md` — GET /health
+_(현재 없음)_
 
 ---
 
@@ -30,3 +16,4 @@
 | # | 날짜 | 요약 |
 |---|------|------|
 | WT-1 | 2026-04-05 | `POST /game/create` Gemini 연동 완료 — `frontend/pages/lobby.py` (`f5321b6`) |
+| WT-2 | 2026-04-05 | `/health rag_status` Gemini 연동 완료 — `status_panel.py`·`app.py` (`e8046d2`) |

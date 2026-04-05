@@ -2,8 +2,8 @@
 
 > **문서 버전**: v2.3
 > **최초 작성일**: 2026-03-18
-> **최종 업데이트**: 2026-04-05 (G-13-4/G-12/I-8 완료 반영 — 전체 Phase 0~8 완료)
-> **기준 커밋**: `f5321b6`
+> **최종 업데이트**: 2026-04-05 (C-5/G-15/Phase 6·7 추가 완료 반영 — 전 항목 완료)
+> **기준 커밋**: `9d63c3d`
 
 ---
 
@@ -16,7 +16,7 @@ Phase 2: AI Agent 기초                ✅ 완료 (bind_tools 부분 적용 포
 Phase 3: WebSocket + 채팅 UI          ✅ 완료 (REST 혼용, 채널 필터링 완료)
 Phase 4: 슈퍼바이저 + A2A 연동        ✅ 완료 (재진단 루프 포함 C-8 완료)
 Phase 5: RAG + MCP 통합               ✅ 완료 (C-9 인덱싱, C-2 ToolNode 완료)
-Phase 6: 풀 게임 통합 테스트          🔄 테스트 파일 작성 (실행 여부 미확인)
+Phase 6: 풀 게임 통합 테스트          🔄 부분 완료 (단위 테스트 추가, E2E/AI 시뮬 미완)
 Phase 7: UI 다듬기 + 배포             ✅ 완료 (G-13/G-14/G-12 모두 완료)
 Phase 8: GameInsightAgent — 게임 결과 RAG 자동 업데이트  ✅ 완료 (C-10 전체)
 ```
@@ -46,13 +46,14 @@ Phase 8: GameInsightAgent — 게임 결과 RAG 자동 업데이트  ✅ 완료 
 | 5-7 | bind_tools | ✅ C-2 ToolNode ReAct 루프 완료 |
 | 5-8 | 슈퍼바이저 MCP | ⬜ 미구현 |
 
-### Phase 6: 통합 테스트 🔄 파일 작성
+### Phase 6: 통합 테스트 🔄 부분 완료
 
 | # | 작업 | 상태 | 위치 |
 |---|------|------|------|
-| 6-1~6-3 | 백엔드 단위테스트 | 🔄 작성 | `backend/tests/` |
+| 6-1~6-3 | 백엔드 단위테스트 | ✅ (API·WebSocket·health 테스트 추가, `7673e40`·`5f7175a`) | `backend/tests/` |
 | 6-4 | 백엔드 conftest | ✅ | |
-| 6-5~6-6 | 프론트 테스트 | 🔄 작성 | `frontend/tests/` |
+| 6-5 | 프론트 E2E (Playwright) | ✅ 셀렉터 수정 (`9c829fc`) | `frontend/tests/e2e/` |
+| 6-6 | 프론트 단위테스트 | ✅ role color utility (`ab8054a`) | `frontend/tests/pytest/` |
 | 6-7 | AI vs AI 시뮬레이션 | ⬜ 미작성 | |
 
 ### Phase 7: 배포 ✅ 대부분 완료
@@ -188,9 +189,7 @@ _(시급 이슈 없음)_
 
 ### 🟡 중간
 
-| # | 이슈 | 담당 | 조치 |
-|---|------|------|------|
-| I-2 | Redis Checkpointer 폴백 제거 | Cursor | C-5 |
+_(중간 이슈 없음)_
 
 ### ✅ 해소된 이슈
 
@@ -209,6 +208,7 @@ _(시급 이슈 없음)_
 | ~~I-5~~ | voter 필드 (G-1) |
 | ~~I-6~~ | is-suspected CSS (G-9) |
 | ~~I-8~~ | GameRegistry 동적 로비 + `POST /game/create` + 인원별 직업 구성 (`1baa68f`) |
+| ~~I-2~~ | Redis Checkpointer 폴백 제거 (C-5, `5b557a0`) |
 | ~~Phase 8~~ | GameInsightAgent 전체 (C-10, `e531163`~`d691e80`) |
 
 ---
@@ -222,8 +222,7 @@ _(시급 이슈 없음)_
 
 ### Cursor
 ```
-WORK_ORDER_CURSOR.md 참조
-C-5 (Redis Checkpointer 폴백 제거) — 현재 유일한 잔존 작업
+현재 지시된 작업 없음 — 대기 중
 ```
 
 ### Gemini

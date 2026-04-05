@@ -2,7 +2,7 @@
 
 > **대상**: Cursor AI — 백엔드 개발자
 > **작성자**: Claude AI (기획자 + 인프라)
-> **최종 업데이트**: 2026-04-05 (C-2/7/8/9/10/11 완료 반영)
+> **최종 업데이트**: 2026-04-05 (C-5 완료 반영 — 잔존 작업 없음)
 
 > 작업 전 반드시 `ROLE_CURSOR.md`와 이 문서를 먼저 읽을 것.  
 > **docker-compose.yml은 수정하지 않는다** — Claude 담당.
@@ -41,6 +41,7 @@
 | C-10-4 | `rag/store.py` source="runtime" 메타데이터 충돌 방지 | `387ea8a` |
 | C-10 | analyze_pending SCAN 배치 | `d691e80` |
 | I-8 | `POST /game/create` + `composition.py` 인원별 직업 구성 + Registry get/create 분리 | `1baa68f` |
+| C-5 | Redis Checkpointer 폴백 제거 — 실패 시 raise (폴백 없음) | `5b557a0` |
 
 ---
 
@@ -170,9 +171,9 @@ graph.py에서 ToolNode 루프를 연결하는 것이 목표.**
 
 ---
 
-## 🔄 현재 작업
+## ~~🔄 현재 작업~~ ✅ C-5 완료 — 잔존 작업 없음
 
-### [C-5] Redis Checkpointer 전면 연동
+### ~~[C-5]~~ ✅ Redis Checkpointer 전면 연동 완료 (`5b557a0`)
 
 **현황**: `MAFIA_USE_REDIS_CHECKPOINTER=1`일 때만 RedisSaver 사용, 실패 시 일반 compile 폴백.  
 docker-compose에 `MAFIA_USE_REDIS_CHECKPOINTER=1` 설정되어 있음 (Claude 처리).
