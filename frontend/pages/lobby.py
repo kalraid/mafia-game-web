@@ -6,9 +6,27 @@ def draw_lobby():
     player_name = st.text_input("닉네임", placeholder="홍길동")
     player_count = st.slider("총 플레이어 수", min_value=4, max_value=20, value=8)
     
-    # 직업 구성 미리보기 (GAME_RULES.md 구성표 기반)
-    # 예: 8명 → 마피아2 경찰1 의사1 시민4
-    # 이 부분은 추후 구현될 수 있습니다.
+    # 직업 구성 미리보기 로직 (GAME_RULES.md 기반)
+    def get_composition(count):
+        if count <= 5: return {"마피아": 1, "경찰": 1, "의사": 0, "점쟁이": 0, "시민": count-2}
+        if count <= 7: return {"마피아": 1, "경찰": 1, "의사": 1, "점쟁이": 0, "시민": count-3}
+        if count <= 9: return {"마피아": 2, "경찰": 1, "의사": 1, "점쟁이": 0, "시민": count-4}
+        if count <= 11: return {"마피아": 2, "경찰": 1, "의사": 1, "점쟁이": 0, "시민": count-5, "광대": 1}
+        if count <= 14: return {"마피아": 2, "경찰": 1, "의사": 1, "점쟁이": 1, "시민": count-6, "광대": 1}
+        if count <= 19: return {"마피아": 2, "킬러": 1, "경찰": 1, "의사": 1, "점쟁이": 1, "시민": count-8, "광대": 1, "스파이": 1}
+        return {"마피아": 3, "킬러": 1, "경찰": 2, "의사": 2, "점쟁이": 1, "시민": count-11, "광대": 2, "스파이": 1}
+
+    comp = get_composition(player_count)
+    
+    with st.expander("📊 예상 직업 구성 확인", expanded=True):
+        cols = st.columns(4)
+        idx = 0
+        icons = {"마피아": "🔫", "킬러": "🗡️", "경찰": "🚓", "의사": "🏥", "점쟁이": "🔮", "시민": "🏙️", "광대": "🎭", "스파이": "🕵️"}
+        for role, num in comp.items():
+            if num > 0:
+                with cols[idx % 4]:
+                    st.metric(label=f"{icons.get(role, '')} {role}", value=num)
+                idx += 1
     
     if st.button("게임 시작 🎮", disabled=not player_name):
         import requests
