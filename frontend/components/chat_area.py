@@ -98,8 +98,10 @@ def draw_chat_area():
 
         # Message Input for global chat
         is_chat_phase = phase in ["day_chat"]
-        chat_input = st.text_input("메시지를 입력하세요...", key="chat_input", disabled=not is_chat_phase)
-        if st.button("전송", key="chat_send", disabled=not is_chat_phase):
+        is_alive = next((p.get("is_alive", True) for p in players if p.get("name") == my_name), True)
+        
+        chat_input = st.text_input("메시지를 입력하세요...", key="chat_input", disabled=not (is_chat_phase and is_alive))
+        if st.button("전송", key="chat_send", disabled=not (is_chat_phase and is_alive)):
             if chat_input:
                 try:
                     response = requests.post(

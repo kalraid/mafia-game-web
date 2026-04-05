@@ -120,7 +120,8 @@ def draw_status_panel():
                 votes=player.get("votes", 0),
                 disabled=not (interaction_allowed and is_selectable),
                 role=player.get("role"),
-                is_silent=player.get("is_silent", False)
+                is_silent=player.get("is_silent", False),
+                trust_score=player.get("trust_score", 0.5)
             )
 
     # Button Area
