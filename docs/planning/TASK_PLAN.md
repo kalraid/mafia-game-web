@@ -161,13 +161,13 @@ BACKEND_URL=http://<서버IP>:8000
 
 ## 5. 테스트 가능 여부
 
-### ✅ localhost 모드 (로컸 개발시)
+### ✅ localhost 모드 (로컬 개발 시)
 
 | 테스트 | 가능 | 방법 |
 |--------|------|------|
 | 백엔드 단위테스트 | ✅ | `cd backend && pytest tests/` (MAFIA_USE_LLM=0) |
 | 백엔드 API 수동 테스트 | ✅ | `http://localhost:8000/docs` Swagger UI |
-| 프론트 로볼 실행 | ✅ | `streamlit run frontend/app.py` |
+| 프론트 로컬 실행 | ✅ | `streamlit run frontend/app.py` |
 | 프론트 단위테스트 | ✅ | `pytest frontend/tests/pytest/` |
 | AI 게임 실행 | ✅ | 로비에서 닉네임 입력 후 게임 시작 |
 
@@ -177,8 +177,8 @@ BACKEND_URL=http://<서버IP>:8000
 |--------|------|------|
 | Redis 동작 | ✅ 바로 | |
 | Backend 동작 | ✅ 바로 | |
-| Frontend 동작 | ❌ BUG-1 수정 후 | G-10 완료 시 |
-| 수동 테스트 (브라우저) | ❌ BUG-1,2 수정 후 | G-10, G-11 완료 시 |
+| Frontend 동작 | ✅ G-10 완료 | |
+| 수동 테스트 (브라우저) | ✅ G-10, G-11 완료 | |
 | E2E (Playwright) | ❌ 버그 수정 후 + 테스트 코드 작성 | 6-5 완료 시 |
 
 ---

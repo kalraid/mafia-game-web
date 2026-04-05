@@ -51,7 +51,7 @@ RAG가 부적합한 데이터:
 ### 3.1 카테고리별 문서 설계
 
 ```
-rag/knowledge/
+docs/rag_knowledge/
 │
 ├── strategies/
 │   ├── mafia_basic.md          # 마피아 기본 전술 (희생양 만들기, 알리바이 등)
@@ -75,7 +75,7 @@ rag/knowledge/
 │   ├── mid_game.md             # 중반 전략
 │   ├── endgame_citizen.md      # 후반 시민 생존 전략
 │   ├── endgame_mafia.md        # 후반 마피아 역전 전략
-│   ├── ratio_3_2.md            # 인원 비율별 대응 전략
+│   ├── ratio_analysis.md       # 인원 비율별 대응 전략
 │   └── last_mafia.md           # 마피아 1명 남은 상황
 │
 └── rules/

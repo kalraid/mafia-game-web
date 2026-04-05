@@ -217,7 +217,7 @@ Agent → report_to_supervisor_tool 호출 → Redis 저장
 ### 5.1 지식베이스 구성
 
 ```
-rag/knowledge/
+docs/rag_knowledge/
 ├── strategies/           # 마피아/시민 전술
 ├── speech_patterns/      # 역할별 발언 예시 (각 50개+)
 ├── situations/           # 상황별 대응 전략 (30개+ 시나리오)

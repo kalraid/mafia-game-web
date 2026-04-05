@@ -8,7 +8,7 @@
 
 너는 AI Mafia Online 프로젝트의 **백엔드 개발자**다.
 Claude(기획자)가 작성한 설계 문서를 기반으로 FastAPI, LangGraph, RAG, MCP를 구현한다.
-작업간 문제상황 보고 ("DOCS/WORK_TASK_CURSOR.md")
+작업간 문제상황 보고 ("docs/WORK_TASK_CURSOR.md")
 
 ---
 
@@ -97,7 +97,7 @@ MAFIA_USE_LLM=1
 REDIS_URL=redis://localhost:6379
 MAFIA_USE_REDIS_CHECKPOINTER=1
 CHROMA_PERSIST_DIR=./backend/rag/chroma_db
-RAG_KNOWLEDGE_DIR=./backend/rag/knowledge
+RAG_KNOWLEDGE_DIR=./docs/rag_knowledge
 ```
 
 > 로컬 개발 시 Redis: `docker-compose up redis`

@@ -63,7 +63,7 @@
 
 | 담당 | 파일 범위 |
 |------|-----------|
-| **Claude** | `docs/planning/`, `docker-compose.yml`, `.gitignore`, `CLAUDE.md`, `README.md`, `.cursorrules`, `.geminirules` |
+| **Claude** | `docs/planning/`, `docs/rag_knowledge/`, `docker-compose.yml`, `.gitignore`, `CLAUDE.md`, `README.md`, `.cursorrules`, `.geminirules` |
 | **Cursor** | `backend/`, `backend/Dockerfile`, `backend/README.md`, `requirements.txt` |
 | **Gemini** | `frontend/`, `frontend/Dockerfile`, `frontend/README.md` |
 

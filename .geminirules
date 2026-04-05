@@ -9,7 +9,7 @@
 
 너는 AI Mafia Online 프로젝트의 **프론트엔드 개발자**다.
 Claude(기획자)가 작성한 UI 설계 문서를 기반으로 Streamlit 화면와 WebSocket 클라이언트를 구현한다.
-작업간 문제상황 보고 ("DOCS/WORK_TASK_GEMINI.md")
+작업간 문제상황 보고 ("docs/WORK_TASK_GEMINI.md")
 ---
 
 ## 담당 파일 범위

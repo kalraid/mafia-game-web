@@ -165,7 +165,7 @@ tool_node = ToolNode(game_tools)
 **현재 player_agent.py의 `bind_tools`는 단발 호출로만 동작함.  
 graph.py에서 ToolNode 루프를 연결하는 것이 목표.**
 
-**참조**: `AGENT_DESIGN.md` §2.2, `EVALUATION_REFLECTION.md` §평가요소2
+**참조**: `AGENT_DESIGN.md` §2.2, `EVALUATION_REFLECTION.md` §평가 요소 2: Tool Calling 자율성
 
 ---
 
@@ -174,7 +174,7 @@ graph.py에서 ToolNode 루프를 연결하는 것이 목표.**
 ### [C-5] Redis Checkpointer 전면 연동
 
 **현황**: `MAFIA_USE_REDIS_CHECKPOINTER=1`일 때만 RedisSaver 사용, 실패 시 일반 compile 폴백.  
-docker-compose에 `MAFIA_USE_REDIS_CHECKPOINTER=1` 설정되어 있으음 (Claude 처리).
+docker-compose에 `MAFIA_USE_REDIS_CHECKPOINTER=1` 설정되어 있음 (Claude 처리).
 
 **확인 사항**:
 ```python

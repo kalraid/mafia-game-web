@@ -67,7 +67,7 @@ backend/
 ├── game/                # engine, runner, registry, snapshot, vote, roles, phase, timer, win_condition
 ├── agents/              # LangGraph AgentGraph, PlayerAgent, AgentPool, persona
 ├── supervisors/         # citizen, mafia, neutral
-├── rag/                 # store, retriever, knowledge/
+├── rag/                 # store, retriever
 ├── mcp/                 # tools, server
 └── models/              # game, chat, directive
 ```
