@@ -1,7 +1,7 @@
 import pytest
 import requests
 from unittest.mock import Mock, patch
-from frontend.utils import handle_request_error
+from frontend.utils import handle_request_error, get_role_color
 
 @patch('frontend.utils.st')
 def test_handle_request_error_connection_error(mock_st):
@@ -71,3 +71,23 @@ def test_handle_request_error_timeout(mock_st):
 
     # Assert
     mock_st.error.assert_called_once_with(expected_message)
+
+def test_get_role_color():
+    """
+    Tests if get_role_color returns the correct hex codes for various roles and teams.
+    """
+    # Mafia
+    assert get_role_color("mafia", "mafia") == "#C0392B"
+    assert get_role_color("citizen", "mafia") == "#C0392B"
+    
+    # Neutral
+    assert get_role_color("jester", "neutral") == "#8E44AD"
+    assert get_role_color("spy", "citizen") == "#8E44AD"
+    
+    # Specific Roles
+    assert get_role_color("police") == "#2980B9"
+    assert get_role_color("doctor") == "#27AE60"
+    
+    # Unknown / Default
+    assert get_role_color("unknown") == "#95A5A6"
+    assert get_role_color("citizen", "citizen") == "#34495E"
