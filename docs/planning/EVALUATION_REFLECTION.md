@@ -178,7 +178,7 @@ RAG 지식베이스 목표 규모:
     "game_size": "medium",            # small(4-7)|medium(8-12)|large(13-20)
     "round_phase": "mid",             # early|mid|end
     "speech_style": "aggressive",     # 발언 패턴 카테고리
-    "source": "manual"                # manual|generated
+    "source": "static"                 # static|runtime
   }
 
 RAG 검색 고도화:

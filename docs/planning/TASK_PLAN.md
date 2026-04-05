@@ -32,11 +32,11 @@ Phase 8: GameInsightAgent — 게임 결과 RAG 자동 업데이트  ✅ 완료 
 
 | # | 작업 | 상태 |
 |---|------|------|
-| 4-1~4-8 | LangGraph, 지시 흐름, 시민/마피아 수퍼바이저, NIGHT_MAFIA, A2A, 직렬화 | ✅ |
+| 4-1~4-8 | LangGraph, 지시 흐름, 시민/마피아 슈퍼바이저, NIGHT_MAFIA, A2A, 직렬화 | ✅ |
 | 4-9 | 슈퍼바이저 재진단 루프 | ✅ C-8 완료 |
 | 4-10 | Redis Checkpointer | 🔄 부분 (조건부 활성화, C-5 잔존) |
 
-### Phase 5: RAG + MCP 통합 ✅ 완료
+### Phase 5: RAG + MCP 통합 🔄 부분 완료 (5-8 미구현)
 
 | # | 작업 | 상태 |
 |---|------|------|

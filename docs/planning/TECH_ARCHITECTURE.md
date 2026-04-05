@@ -2,7 +2,7 @@
 
 > **문서 버전**: v1.2  
 > **최초 작성일**: 2026-03-18  
-> **최종 업데이트**: 2026-03-19  
+> **최종 업데이트**: 2026-04-05  
 > **변경 내용**: 투표/능력 통신 방식 WebSocket → REST 변경 기록, 구현 현황 반영
 
 ---
@@ -107,7 +107,7 @@ POST /game/{game_id}/ability
   Response: { status: "ok" }
 
 GET /health
-  Response: { status: "ok" }
+  Response: { status: "ok", rag_status: "ok"|"unknown"|"error", llm_provider: "anthropic"|"azure"|"disabled"|"fallback" }
 ```
 
 ### 3.3 WebSocket 이벤트 (서버 → 클라이언트)
@@ -200,7 +200,11 @@ game:{game_id}:state              → 전체 게임 상태 JSON
 game:{game_id}:chat:{round}       → 라운드별 채팅 히스토리
 game:{game_id}:events             → 게임 이벤트 로그
 game:{game_id}:directives         → 슈퍼바이저 → Agent 지시
+game:{game_id}:prologue           → 게임 프롤로그 텍스트
+game:{game_id}:players            → 플레이어 목록 JSON
 agent:{game_id}:{agent_id}:memory → Agent 개인 관찰 메모리
+mafia:game_archive:{game_id}      → 게임 결과 아카이브 JSON (TTL 30일)
+mafia:game_analysis:processed     → 분석 완료 게임 ID Set
 ```
 
 ---

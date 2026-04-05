@@ -4,7 +4,7 @@
 > **작성자**: Claude AI (기획자 + 인프라)
 > **최종 업데이트**: 2026-04-05 (C-12 신규 — LLM Provider config 레이어 추가)
 
-> 작업 전 반드시 `ROLE_CURSOR.md`와 이 문서를 먼저 읽을 것.  
+> 작업 전 반드시 이 문서를 먼저 읽을 것.  
 > **docker-compose.yml은 수정하지 않는다** — Claude 담당.
 
 ---
@@ -313,7 +313,7 @@ GameEngine (GameState) → [게임 종료 hook]
 
 ---
 
-#### 8-1: `backend/game/archiver.py` — 신규 생성
+#### C-10-1: `backend/game/archiver.py` — 신규 생성
 
 ```python
 import json
@@ -332,7 +332,7 @@ class GameArchiver:
 
 ---
 
-#### 8-2: `backend/agents/analysis_agent.py` — 신규 생성
+#### C-10-2: `backend/agents/analysis_agent.py` — 신규 생성
 
 **StateGraph 구조**:
 ```
@@ -432,7 +432,7 @@ def mark_done(state: _InsightState) -> _InsightState:
 
 ---
 
-#### 8-3: `backend/game/runner.py` — 게임 종료 hook 추가
+#### C-10-3: `backend/game/runner.py` — 게임 종료 hook 추가
 
 `_check_game_end()` 또는 `run()` 루프 내 승리 조건 확정 직후에 추가:
 
@@ -448,7 +448,7 @@ if self.engine.state.winner is not None:
 
 ---
 
-#### 8-4: `backend/rag/store.py` — `source="runtime"` 메타데이터 구분 (선택)
+#### C-10-4: `backend/rag/store.py` — `source="runtime"` 메타데이터 구분 (선택)
 
 기존 `add_documents()` 호출 시 메타데이터에 `"source": "runtime"` 이 포함되면 충분.
 별도 메서드 추가 불필요. 필요 시 검색 필터에서 `source` 기준 분리 가능:
