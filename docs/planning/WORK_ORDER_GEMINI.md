@@ -2,7 +2,7 @@
 
 > **대상**: Gemini AI — 프론트엔드 개발자
 > **작성자**: Claude AI (기획자 + 인프라 엔지니어)
-> **최종 업데이트**: 2026-04-05 (G-15/G-12 enhance/Phase 6·7 추가 완료 반영 — 잔존 작업 없음)
+> **최종 업데이트**: 2026-04-05 (G-16 신규 — LLM provider 상태 표시)
 
 > 작업 전 `.geminirules` 읽기 → `WORK_ORDER_GEMINI.md` 확인 → 작업 시작.
 
@@ -230,6 +230,65 @@ with st.expander("🔍 RAG 컨텍스트 (디버그)"):
 3. 백엔드가 제공하지 않는 필드에 의존하는 기존 코드 있으면 제거/통일
 
 **참조**: `backend/README.md` — GET /health, `WORK_ORDER_GEMINI.md` G-12
+
+---
+
+## 🆕 신규 작업
+
+### [G-16] LLM Provider 상태 표시 — `/health` `llm_provider` 연동
+
+> **배경**  
+> Cursor(C-12)가 백엔드 `/health` 응답에 `llm_provider` 필드를 추가한다.  
+> 값: `"anthropic"` | `"azure"` | `"disabled"` | `"fallback"`  
+> 프론트엔드에서 현재 어떤 LLM으로 동작 중인지 사용자에게 표시한다.  
+> **docker-compose / 환경변수 변경은 Claude 담당** — Gemini는 프론트 코드만 수정.
+
+---
+
+#### G-16-1: `frontend/app.py` 또는 `frontend/components/status_panel.py` — `llm_provider` 읽기
+
+기존 `/health` 호출 코드(G-15에서 구현)에 `llm_provider` 필드를 추가로 읽어  
+`st.session_state.llm_provider` 에 저장한다.
+
+```python
+# 기존 (G-15)
+health = requests.get(f"{BACKEND_URL}/health").json()
+st.session_state.rag_status = health.get("rag_status", "unknown")
+
+# 수정 (✅)
+health = requests.get(f"{BACKEND_URL}/health").json()
+st.session_state.rag_status    = health.get("rag_status", "unknown")
+st.session_state.llm_provider  = health.get("llm_provider", "unknown")
+```
+
+---
+
+#### G-16-2: 사이드바 또는 상태 패널에 LLM provider 뱃지 표시
+
+```python
+# 예시 — status_panel.py 또는 사이드바
+provider = st.session_state.get("llm_provider", "unknown")
+
+provider_label = {
+    "anthropic": "🟣 Anthropic Claude",
+    "azure":     "🔵 Azure OpenAI",
+    "disabled":  "⚫ LLM 비활성화",
+    "fallback":  "🟡 Fallback 모드",
+}.get(provider, f"❓ {provider}")
+
+st.caption(f"LLM: {provider_label}")
+```
+
+표시 위치는 RAG 상태 위젯(G-12/G-15) 근처에 함께 배치할 것.
+
+---
+
+**검증 방법**:
+1. `MAFIA_LLM_PROVIDER=anthropic` 으로 docker-compose 실행 → 사이드바에 "🟣 Anthropic Claude" 표시
+2. `MAFIA_USE_LLM=0` 으로 실행 → "⚫ LLM 비활성화" 표시
+3. 백엔드 미기동 시 → 기존 서버 오프라인 표시와 함께 `llm_provider` 미표시 (에러 무시)
+
+**참조**: `WORK_ORDER_GEMINI.md` G-12/G-15, `backend/README.md` — GET /health
 
 ---
 

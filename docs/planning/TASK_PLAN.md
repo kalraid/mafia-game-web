@@ -2,7 +2,7 @@
 
 > **문서 버전**: v2.3
 > **최초 작성일**: 2026-03-18
-> **최종 업데이트**: 2026-04-05 (C-5/G-15/Phase 6·7 추가 완료 반영 — 전 항목 완료)
+> **최종 업데이트**: 2026-04-05 (C-12/G-16 신규 — LLM Provider config 레이어)
 > **기준 커밋**: `9d63c3d`
 
 ---
@@ -187,9 +187,13 @@ BACKEND_URL=http://<서버IP>:8000
 
 _(시급 이슈 없음)_
 
-### 🟡 중간
+### 🟡 신규 작업
 
-_(중간 이슈 없음)_
+| # | 이슈 | 담당 | 조치 |
+|---|------|------|------|
+| I-9 | LLM Provider 환경변수 분기 미지원 (Anthropic 전용 고정) | Cursor | **C-12** |
+| I-10 | 프론트에 LLM provider 상태 미표시 | Gemini | **G-16** (C-12 선행) |
+| I-9 인프라 | `.env.example` / `docker-compose.yml` AOAI_* 항목 미추가 | **Claude** | C-12 연동 시 처리 |
 
 ### ✅ 해소된 이슈
 
@@ -217,17 +221,20 @@ _(중간 이슈 없음)_
 
 ### Claude
 ```
-✅ 진도 업데이트 완료 (2026-04-05)
+[C-12 연동] .env.example에 MAFIA_LLM_PROVIDER / AOAI_* 항목 추가
+[C-12 연동] docker-compose.yml backend environment에 MAFIA_LLM_PROVIDER / AOAI_* pass-through 추가
 ```
 
 ### Cursor
 ```
-현재 지시된 작업 없음 — 대기 중
+WORK_ORDER_CURSOR.md 참조
+C-12: backend/config.py 신규 + player_agent / analysis_agent / health 엔드포인트 교체
 ```
 
 ### Gemini
 ```
-현재 지시된 작업 없음 — 대기 중
+WORK_ORDER_GEMINI.md 참조
+G-16: /health llm_provider 읽어 사이드바 뱃지 표시 (C-12 완료 후 진행)
 ```
 
 ---

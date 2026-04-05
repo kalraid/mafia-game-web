@@ -2,7 +2,7 @@
 
 > **대상**: Cursor AI — 백엔드 개발자
 > **작성자**: Claude AI (기획자 + 인프라)
-> **최종 업데이트**: 2026-04-05 (C-5 완료 반영 — 잔존 작업 없음)
+> **최종 업데이트**: 2026-04-05 (C-12 신규 — LLM Provider config 레이어 추가)
 
 > 작업 전 반드시 `ROLE_CURSOR.md`와 이 문서를 먼저 읽을 것.  
 > **docker-compose.yml은 수정하지 않는다** — Claude 담당.
@@ -484,6 +484,181 @@ docker-compose.yml 변경이 필요하면 **직접 수정 말고** Claude에게 
 요청: 환경변수 FOO=bar 추가 / 포트 변경 / 기타
 이유: ...
 ```
+
+---
+
+## 🆕 신규 작업
+
+### [C-12] LLM Provider config 레이어 추가 — Azure OpenAI / Anthropic 통합 지원
+
+> **배경**  
+> 현재 백엔드는 `ANTHROPIC_API_KEY` + `ChatAnthropic` 단일 경로만 지원.  
+> 과제 제출 환경은 **Azure OpenAI** (`AOAI_*` 환경변수)로 LLM을 주입한다.  
+> docker-compose 실행 시 환경변수만 바꾸면 Provider가 전환되도록 config 레이어를 추가한다.  
+> **docker-compose.yml / .env.example 수정은 Claude 담당** — Cursor는 백엔드 코드만 수정.
+
+---
+
+#### C-12-1: `backend/config.py` — LLM config 중앙화 (신규 생성)
+
+환경변수를 한 곳에서 읽어 `LLM_CONFIG` 딕셔너리로 제공한다.
+
+```python
+# backend/config.py
+import os
+
+# ---------------------------------------------------------
+# LLM Provider 선택
+# MAFIA_LLM_PROVIDER=anthropic (기본) | azure
+# ---------------------------------------------------------
+LLM_PROVIDER = os.getenv("MAFIA_LLM_PROVIDER", "anthropic").lower()
+
+LLM_CONFIG: dict = {
+    "provider": LLM_PROVIDER,
+
+    # Anthropic
+    "anthropic_api_key":  os.getenv("ANTHROPIC_API_KEY", "").strip(),
+    "anthropic_model":    os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4"),
+
+    # Azure OpenAI
+    "aoai_endpoint":      os.getenv("AOAI_ENDPOINT", "").strip(),
+    "aoai_api_key":       os.getenv("AOAI_API_KEY", "").strip(),
+    "aoai_api_version":   os.getenv("AOAI_API_VERSION", "2024-02-01"),
+    "aoai_deploy_chat":   os.getenv("AOAI_DEPLOY_GPT4O", "").strip(),      # 기본 chat 모델
+    "aoai_deploy_mini":   os.getenv("AOAI_DEPLOY_GPT4O_MINI", "").strip(), # 경량 모델 (선택)
+    "aoai_deploy_embed":  os.getenv("AOAI_DEPLOY_EMBED_3_LARGE", "").strip(),
+}
+
+def is_llm_enabled() -> bool:
+    """LLM 활성화 여부 (MAFIA_USE_LLM=0 이면 False)"""
+    return os.getenv("MAFIA_USE_LLM", "1") != "0"
+
+def get_chat_llm(temperature: float = 0):
+    """
+    Provider에 따라 LangChain Chat LLM 객체를 반환한다.
+    키가 없으면 None 반환 → 호출부에서 Fallback 처리.
+    """
+    if not is_llm_enabled():
+        return None
+
+    if LLM_CONFIG["provider"] == "azure":
+        api_key  = LLM_CONFIG["aoai_api_key"]
+        endpoint = LLM_CONFIG["aoai_endpoint"]
+        deploy   = LLM_CONFIG["aoai_deploy_chat"]
+        if not (api_key and endpoint and deploy):
+            return None
+        from langchain_openai import AzureChatOpenAI
+        return AzureChatOpenAI(
+            azure_endpoint     = endpoint,
+            api_key            = api_key,
+            azure_deployment   = deploy,
+            openai_api_version = LLM_CONFIG["aoai_api_version"],
+            temperature        = temperature,
+        )
+    else:  # anthropic (기본)
+        api_key = LLM_CONFIG["anthropic_api_key"]
+        if not api_key:
+            return None
+        from langchain_anthropic import ChatAnthropic
+        return ChatAnthropic(
+            model       = LLM_CONFIG["anthropic_model"],
+            api_key     = api_key,
+            temperature = temperature,
+        )
+```
+
+---
+
+#### C-12-2: `backend/agents/player_agent.py` — `get_chat_llm()` 교체
+
+기존 `os.getenv("ANTHROPIC_API_KEY")` 직접 호출을 `config.get_chat_llm()` 으로 교체한다.
+
+```python
+# 기존 (❌)
+api_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
+if not api_key:
+    return self._fallback_decision(state)
+from langchain_anthropic import ChatAnthropic
+llm = ChatAnthropic(model=model_name, temperature=0, api_key=api_key)
+
+# 수정 (✅)
+from backend.config import get_chat_llm
+llm = get_chat_llm(temperature=0)
+if llm is None:
+    return self._fallback_decision(state)
+```
+
+---
+
+#### C-12-3: `backend/agents/analysis_agent.py` — `get_chat_llm()` 교체
+
+동일하게 `os.getenv("ANTHROPIC_API_KEY")` 2곳을 `get_chat_llm()` 으로 교체한다.
+
+---
+
+#### C-12-4: `GET /health` — provider 정보 포함
+
+`main.py`의 `/health` 응답에 현재 LLM provider 정보를 추가한다.
+
+```python
+# 기존
+{ "status": "ok", "rag_status": "ok" }
+
+# 수정
+{ "status": "ok", "rag_status": "ok", "llm_provider": "azure" }
+# llm_provider: "anthropic" | "azure" | "disabled"
+```
+
+`llm_provider` 값 결정 로직:
+- `MAFIA_USE_LLM=0` → `"disabled"`
+- `MAFIA_LLM_PROVIDER=azure` + 키 있음 → `"azure"`
+- `MAFIA_LLM_PROVIDER=anthropic` + 키 있음 → `"anthropic"`
+- 키 없음 → `"fallback"`
+
+---
+
+#### Claude 담당 (Cursor 수정 불필요)
+
+아래는 **Claude가 직접 처리**한다. Cursor는 건드리지 않는다:
+
+```
+# .env.example 추가 항목 (Claude 처리)
+MAFIA_LLM_PROVIDER=anthropic   # anthropic | azure
+
+# Azure OpenAI (MAFIA_LLM_PROVIDER=azure 시 사용)
+AOAI_ENDPOINT=
+AOAI_API_KEY=
+AOAI_API_VERSION=2024-02-01
+AOAI_DEPLOY_GPT4O=
+AOAI_DEPLOY_GPT4O_MINI=
+AOAI_DEPLOY_EMBED_3_LARGE=
+AOAI_DEPLOY_EMBED_3_SMALL=
+AOAI_DEPLOY_EMBED_ADA=
+
+# docker-compose.yml environment 섹션에 MAFIA_LLM_PROVIDER 등 pass-through 추가
+```
+
+---
+
+**검증 방법**:
+```bash
+# Anthropic 모드 (기존)
+MAFIA_LLM_PROVIDER=anthropic docker-compose up --build
+curl http://localhost:8000/health
+# → { "llm_provider": "anthropic" }
+
+# Azure 모드
+MAFIA_LLM_PROVIDER=azure AOAI_API_KEY=... AOAI_ENDPOINT=... docker-compose up --build
+curl http://localhost:8000/health
+# → { "llm_provider": "azure" }
+
+# Fallback 모드
+MAFIA_USE_LLM=0 docker-compose up --build
+curl http://localhost:8000/health
+# → { "llm_provider": "disabled" }
+```
+
+**참조**: `.env.example`, `docker-compose.yml`
 
 ---
 
