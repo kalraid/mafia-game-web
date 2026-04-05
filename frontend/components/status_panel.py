@@ -271,6 +271,18 @@ def draw_status_panel():
         else:
             st.markdown("![Unknown](https://img.shields.io/badge/RAG-Unknown-lightgrey?style=flat-square)")
 
+    # LLM Provider Badge (Task G-16)
+    provider = st.session_state.get("llm_provider", "unknown")
+    provider_info = {
+        "anthropic": {"label": "Anthropic Claude", "color": "blueviolet", "icon": "🟣"},
+        "azure":     {"label": "Azure OpenAI", "color": "blue", "icon": "🔵"},
+        "disabled":  {"label": "LLM Disabled", "color": "grey", "icon": "⚫"},
+        "fallback":  {"label": "Fallback Mode", "color": "orange", "icon": "🟡"},
+    }.get(provider, {"label": f"Unknown ({provider})", "color": "lightgrey", "icon": "❓"})
+
+    st.caption(f"{provider_info['icon']} LLM Provider")
+    st.markdown(f"![{provider}](https://img.shields.io/badge/LLM-{provider_info['label'].replace(' ', '%20')}-{provider_info['color']}?style=flat-square)")
+
     with st.expander("🔍 RAG 컨텍스트 (디버그)"):
         rag_ctx = game_state.get("rag_context", [])
         if rag_ctx:

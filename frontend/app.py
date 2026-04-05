@@ -32,9 +32,11 @@ if "page" not in st.session_state:
             health_data = response.json()
             # Backend may or may not provide rag_status yet
             st.session_state.rag_status = health_data.get("rag_status", "ok" if "status" in health_data else "unknown")
+            st.session_state.llm_provider = health_data.get("llm_provider", "unknown")
         else:
             st.session_state.server_connected = False
             st.session_state.rag_status = "error"
+            st.session_state.llm_provider = "unknown"
     except Exception:
         st.session_state.server_connected = False
         st.session_state.rag_status = "error"
