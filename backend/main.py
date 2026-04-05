@@ -8,7 +8,6 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
 from backend.game.registry import GameRegistry
-from backend.game.runner import GameRunner
 from backend.websocket.manager import ConnectionManager
 from backend.game.snapshot import build_game_state_payload
 from backend.models.chat import ChatMessage
@@ -56,6 +55,9 @@ def _ensure_game_runner(game_id: str) -> None:
     engine = registry.get(game_id)
     if engine is None:
         return
+
+    # GameRunner → AgentGraph → RAG 등 무거운 의존성은 루프 시작 시에만 로드한다.
+    from backend.game.runner import GameRunner
 
     runner = GameRunner(game_id=game_id, engine=engine, ws_manager=ws_manager)
     task = asyncio.create_task(runner.run())
