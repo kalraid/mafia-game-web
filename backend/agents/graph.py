@@ -62,8 +62,8 @@ class AgentGraph:
         day_chat_graph.add_node("run_agent", _run_agent_node)
         day_chat_graph.set_entry_point("run_agent")
         day_chat_graph.add_edge("run_agent", END)
-        # C-5: Redis checkpointer를 우선 시도하고, 실패 시 일반 compile로 폴백.
-        # thread_id는 ainvoke(config)에서 game_id+agent_id 조합으로 전달.
+        # C-5: MAFIA_USE_REDIS_CHECKPOINTER=1 이면 RedisSaver 사용, 실패 시 로그 후 raise.
+        # 비활성화 시 compile()만 사용. thread_id는 _invoke_agent의 ainvoke(config)에서 전달.
         self._agent_call_graph = self._compile_agent_graph(day_chat_graph)
 
     def _compile_agent_graph(self, graph: StateGraph) -> object:
