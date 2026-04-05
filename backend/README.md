@@ -132,7 +132,7 @@ ws://localhost:8000/ws/{game_id}
 
 ### REST
 ```
-GET  /health
+GET  /health                  → { status, rag_status }  # rag_status: ok | error | unknown
 POST /game/create             { host_name, player_count }  →  { game_id, player_count }
 POST /game/{game_id}/chat     { sender, content, channel }
 POST /game/{game_id}/vote     { voter, voted_for }

@@ -52,3 +52,12 @@ def test_post_chat_unknown_game_returns_404() -> None:
         json={"sender": "p", "content": "hi", "channel": "global"},
     )
     assert resp.status_code == 404
+
+
+def test_health_includes_rag_status() -> None:
+    client = TestClient(app)
+    resp = client.get("/health")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "ok"
+    assert data["rag_status"] in ("ok", "error", "unknown")

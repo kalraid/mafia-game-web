@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import os
 import secrets
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
@@ -19,6 +20,34 @@ registry = GameRegistry()
 ws_manager = ConnectionManager(registry=registry)
 
 _game_tasks: dict[str, asyncio.Task] = {}
+
+
+def _rag_status_for_health() -> str:
+    """
+    Chroma persist 디렉터리와 컬렉션 메타만 확인한다. SentenceTransformer는 로드하지 않음.
+    반환: ok | error | unknown (프론트 G-12와 동일 토큰)
+    """
+    try:
+        import chromadb
+    except ImportError:
+        return "unknown"
+
+    raw = os.getenv("CHROMA_PERSIST_DIR", "backend/rag/chroma_db")
+    path = Path(raw)
+    if not path.is_absolute():
+        path = (Path(__file__).resolve().parent.parent / path).resolve()
+    else:
+        path = path.resolve()
+
+    if not path.exists():
+        return "unknown"
+
+    try:
+        client = chromadb.PersistentClient(path=str(path))
+        client.get_or_create_collection("ai_mafia_knowledge")
+        return "ok"
+    except Exception:
+        return "error"
 
 
 class ChatRequest(BaseModel):
@@ -85,7 +114,7 @@ async def create_game(req: CreateGameRequest) -> CreateGameResponse:
 
 @app.get("/health")
 async def health() -> dict[str, str]:
-    return {"status": "ok"}
+    return {"status": "ok", "rag_status": _rag_status_for_health()}
 
 
 @app.websocket("/ws/{game_id}")
