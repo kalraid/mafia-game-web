@@ -40,6 +40,7 @@
 | C-10-3 | `game/runner.py` 게임 종료 hook 추가 | `7f080d4` |
 | C-10-4 | `rag/store.py` source="runtime" 메타데이터 충돌 방지 | `387ea8a` |
 | C-10 | analyze_pending SCAN 배치 | `d691e80` |
+| I-8 | `POST /game/create` + `composition.py` 인원별 직업 구성 + Registry get/create 분리 | `1baa68f` |
 
 ---
 

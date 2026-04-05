@@ -2,7 +2,7 @@
 
 > **대상**: Gemini AI — 프론트엔드 개발자
 > **작성자**: Claude AI (기획자 + 인프라 엔지니어)
-> **최종 업데이트**: 2026-04-05 (G-13-1~3/G-14 완료 반영, G-13-4 잔존)
+> **최종 업데이트**: 2026-04-05 (G-13 전체/G-14/G-12 완료 반영)
 
 > 작업 전 `.geminirules` 읽기 → `WORK_ORDER_GEMINI.md` 확인 → 작업 시작.
 
@@ -36,27 +36,15 @@
 | G-13-1 | `app.py` L78 message 변수 충돌 수정 | ✅ `8fb383e` |
 | G-13-2 | `app.py` phase 초기값 "lobby" 수정 | ✅ `c973057` |
 | G-13-3 | `status_panel.py` final_speech 투표 버튼 구현 | ✅ `f8d28cf` |
+| G-13-4 | `lobby.py` 백엔드 `POST /game/create` 연동 | ✅ `f5321b6` |
 | G-14 | E2E 테스트 셀렉터 3건 수정 | ✅ `9c829fc` |
+| G-12 | RAG 디버그 패널 (`st.expander`) | ✅ `f5321b6` |
 
 ---
 
-## 🔴 긴급 버그 잔존
+## ~~🔴 완료된 긴급 버그~~ ✅ (G-13 전체, G-14)
 
-### [G-13-4] 즉시 수정 — lobby.py 세션 생성 API 미호출
-
-> **우선순위 최상위** — G-12 이전에 처리.
-
----
-
-#### G-13-4: `frontend/pages/lobby.py` — 게임 시작 시 백엔드 세션 생성 API 미호출
-
-(내용 기존과 동일 — 아래 참조)
-
----
-
-## ~~🔴 완료된 긴급 버그~~ ✅ (G-13-1~3, G-14)
-
-### ~~[G-13]~~ 버그 4건 중 3건 완료
+### ~~[G-13]~~ ✅ 버그 4건 전부 완료
 
 ---
 
@@ -130,7 +118,7 @@ with col2:
 
 ---
 
-#### G-13-4: `frontend/pages/lobby.py` — 게임 시작 시 백엔드 세션 생성 API 미호출
+#### ~~G-13-4~~: `frontend/pages/lobby.py` — 게임 시작 시 백엔드 세션 생성 API 미호출 ✅ `f5321b6`
 
 **증상**: "게임 시작" 버튼이 `game_id`를 클라이언트에서만 생성하고 백엔드에 세션 생성 요청을 보내지 않음 → 백엔드 `GameRegistry`에 해당 game_id 없어 WebSocket/API 실패 가능.
 
@@ -176,9 +164,9 @@ level=2                           # ✅
 
 ---
 
-## 🆕 신규 작업 (2026-03-20 추가)
+## ~~🆕 신규 작업~~ ✅ 완료 (G-12)
 
-### [G-12] RAG 지식문서 ChromaDB 인덱싱
+### ~~[G-12]~~ ✅ RAG 지식문서 디버그 패널 완료 (`f5321b6`)
 
 **배경**: Claude가 `docs/rag_knowledge/` 아래 RAG 지식 문서 20개를 작성 완료.
 Cursor(백엔드)가 ChromaDB에 인덱싱하기 전까지, 프론트엔드에서 해당 문서 경로를 참조할 수 있도록 준비.
@@ -216,6 +204,28 @@ with st.expander("🔍 RAG 컨텍스트 (디버그)"):
 ```
 
 **참조**: `docs/rag_knowledge/` 전체, `TECH_ARCHITECTURE.md` §3.3 WebSocket 이벤트
+
+---
+
+## 🆕 신규 작업
+
+### [G-15] `/health` `rag_status` 연동 — RAG 상태 위젯 완성 (WT-2)
+
+**배경 (Cursor 구현 완료)**
+- `GET /health` 응답에 `rag_status` 필드 추가됨. 값: `ok` | `error` | `unknown`
+  - ChromaDB `ai_mafia_knowledge` 컬렉션 열람 성공 → `ok`
+  - chromadb 미설치/경로 없음 → `unknown`
+  - 열기 실패 등 → `error`
+
+**Gemini 작업 내용 (frontend/)**
+1. 앱 초기화 또는 로비 진입 시 `GET {BACKEND_URL}/health`로 `rag_status` 읽어 `st.session_state.rag_status`에 저장
+2. G-12에서 구현한 RAG 상태 위젯 문구를 해당 값에 맞게 연동
+   - `ok` → "RAG 활성화 ✅"
+   - `error` → "RAG 오류 ⚠️"
+   - `unknown` → "RAG 상태 미확인"
+3. 백엔드가 제공하지 않는 필드에 의존하는 기존 코드 있으면 제거/통일
+
+**참조**: `backend/README.md` — GET /health, `WORK_ORDER_GEMINI.md` G-12
 
 ---
 

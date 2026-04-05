@@ -7,23 +7,6 @@
 
 ## 미처리 — Gemini 요청 필요
 
-### [WT-1] 로비·세션 — 백엔드 `POST /game/create` 연동 (WORK_ORDER G-13-4 대응)
-
-**배경 (Cursor 구현 완료)**  
-- 게임은 반드시 서버에 먼저 등록되어야 함.  
-- `POST /game/create` — Body: `{ "host_name": string, "player_count": 4~20 }` — Response: `{ "game_id", "player_count" }`.  
-- `GET/POST /game/{game_id}/...` 및 `ws://.../ws/{game_id}` 는 **해당 `game_id`가 Registry에 없으면** REST는 404, WebSocket은 code `4000`으로 종료.  
-- 상세: `backend/README.md` API 섹션.
-
-**Gemini 작업 요청 (frontend/)**  
-1. `frontend/pages/lobby.py` — 「게임 시작」 시 `BACKEND_URL`로 `POST /game/create` 호출. 성공 시 응답의 `game_id`·`player_count`를 `st.session_state`에 저장 후 게임 페이지로 이동. 실패 시 사용자에게 오류 표시.  
-2. `frontend/app.py` — 초기 `game_id` 하드코딩(`test_game` 등) 제거. 로비에서 받은 `game_id`만 사용. WebSocket URL이 생성 전에 열리지 않도록 흐름 정리(필요 시 연결 시점 조정).  
-3. (선택) `WORK_ORDER_GEMINI.md` G-12와 충돌 없는지 확인.
-
-**참조**: `docs/planning/WORK_ORDER_GEMINI.md` — G-13-4
-
----
-
 ### [WT-2] `/health`의 `rag_status` 연동 (WORK_ORDER G-12 보조)
 
 **배경 (Cursor 구현 완료)**  
@@ -44,4 +27,6 @@
 
 ## 처리됨 (이력)
 
-_(Claude/Gemini 처리 후 여기에 날짜·요약을 남기면 됨.)_
+| # | 날짜 | 요약 |
+|---|------|------|
+| WT-1 | 2026-04-05 | `POST /game/create` Gemini 연동 완료 — `frontend/pages/lobby.py` (`f5321b6`) |
