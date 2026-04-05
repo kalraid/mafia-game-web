@@ -75,6 +75,9 @@ MAFIA_USE_LLM=0 pytest backend/tests/ -v
 
 # 전체 테스트
 pytest backend/tests/ -v
+
+# Phase 6-7: AI vs AI 헤드리스 스모크 (chromadb + sentence-transformers 설치 필요)
+MAFIA_USE_LLM=0 pytest backend/tests/test_ai_vs_ai_simulation.py -v
 ```
 
 ---
@@ -121,6 +124,7 @@ backend/
 │   └── directive.py
 └── tests/
     ├── conftest.py
+    ├── test_ai_vs_ai_simulation.py  # 헤드리스 게임 종료 스모크
     ├── test_game_engine.py
     ├── test_agents.py
     └── test_websocket.py
