@@ -11,11 +11,32 @@ def draw_lobby():
     # 이 부분은 추후 구현될 수 있습니다.
     
     if st.button("게임 시작 🎮", disabled=not player_name):
-        st.session_state.player_name = player_name
-        st.session_state.game_id = f"game_{player_name}_{player_count}"
-        st.session_state.player_count = player_count
-        st.session_state.page = "game"
-        st.rerun()
+        import requests
+        from frontend.utils import handle_request_error
+        
+        BACKEND_URL = st.session_state.get("BACKEND_URL", "http://localhost:8000")
+        
+        try:
+            resp = requests.post(
+                f"{BACKEND_URL}/game/create",
+                json={"player_count": player_count, "host_name": player_name},
+                timeout=5
+            )
+            if resp.ok:
+                data = resp.json()
+                st.session_state.game_id = data.get("game_id")
+                st.session_state.player_name = player_name
+                st.session_state.player_count = player_count
+                st.session_state.page = "game"
+                st.rerun()
+            else:
+                st.error("백엔드에서 게임 생성에 실패했습니다. (API 미구현일 수 있음)")
+                # 테스트 환경이나 API 미구현 시 폴백 (선택 사항)
+                # st.session_state.game_id = f"game_{player_name}_{player_count}"
+                # st.session_state.page = "game"
+                # st.rerun()
+        except Exception as e:
+            st.error(f"서버 연결 오류: {e}")
 
 if __name__ == "__main__":
     # 테스트를 위한 부분

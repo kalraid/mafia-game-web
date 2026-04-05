@@ -174,7 +174,7 @@ def draw_status_panel():
                     handle_request_error(e, "기권 처리 실패")
 
         elif phase == "final_speech":
-            execution_target = st.session_state.get("execution_target")
+            execution_target = game_state.get("execution_target")
             if execution_target:
                 st.write(f"**{execution_target}**의 최후 변론입니다. 처형 여부를 투표하세요.")
             

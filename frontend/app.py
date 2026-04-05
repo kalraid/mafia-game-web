@@ -19,12 +19,12 @@ if "page" not in st.session_state:
     st.session_state.page = "lobby"
     st.session_state.game_id = "test_game" # Hardcoded for now
     st.session_state.game_state = {"phase": "lobby"} # Default to lobby
+    st.session_state.BACKEND_URL = os.environ.get("BACKEND_URL", "http://localhost:8000")
     
     # On first load, check backend health and RAG status
     try:
         import requests
-        backend_url = os.environ.get("BACKEND_URL", "http://localhost:8000")
-        response = requests.get(f"{backend_url}/health")
+        response = requests.get(f"{st.session_state.BACKEND_URL}/health")
         if response.status_code == 200:
             health_data = response.json()
             st.session_state.rag_status = health_data.get("rag_status", "unknown")

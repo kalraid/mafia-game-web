@@ -123,11 +123,25 @@ frontend/
 
 ## REST 송신
 
-| 액션 | 엔드포인트 | Body |
-|------|-----------|------|
-| 채팅 | `POST /game/{id}/chat` | `{ sender, content, channel }` |
-| 투표 | `POST /game/{id}/vote` | `{ voter, voted_for }` |
-| 능력 | `POST /game/{id}/ability` | `{ player_name, ability, target }` |
+| 액션 | 엔드포인트 | Body | 비고 |
+|------|-----------|------|------|
+| 게임 생성 | `POST /game/create` | `{ host_name, player_count }` | 로비에서 호출 (G-13-4) |
+| 채팅 | `POST /game/{id}/chat` | `{ sender, content, channel }` | |
+| 투표 | `POST /game/{id}/vote` | `{ voter, voted_for }` | |
+| 능력 | `POST /game/{id}/ability` | `{ player_name, ability, target }` | |
+
+---
+
+## 주요 기능 및 구성
+
+### 1. 게임 생성 (G-13-4)
+로비(`pages/lobby.py`)에서 닉네임과 인원수를 설정한 후 "게임 시작" 버튼을 누르면 백엔드에 게임 생성을 요청합니다. 성공 시 발급된 `game_id`를 기반으로 게임 화면으로 이동합니다.
+
+### 2. RAG 디버그 패널 (G-12)
+상태창(`components/status_panel.py`) 하단에 AI Agent가 참조한 RAG 컨텍스트를 실시간으로 확인할 수 있는 디버그 패널이 포함되어 있습니다. 이는 개발 및 테스트 단계에서 AI의 의사결정 근거를 확인하는 용도로 사용됩니다.
+
+### 3. WebSocket 핸들러 (app.py)
+`streamlit-websocket-client`를 통해 백엔드와 실시간으로 통신하며, 수신된 이벤트에 따라 세션 상태(`st.session_state.game_state`)를 업데이트하고 화면을 자동으로 갱신(Rerun)합니다.
 
 ---
 
