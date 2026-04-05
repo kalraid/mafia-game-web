@@ -88,7 +88,8 @@ backend/
 ├── game/
 │   ├── engine.py          ← 게임 엔진
 │   ├── runner.py          ← 게임 루프 + WS 브로드캐스트
-│   ├── registry.py        ← 게임 세션 관리
+│   ├── registry.py        ← 게임 세션 관리 (create + get)
+│   ├── composition.py     ← 인원별 직업 구성 (GAME_RULES 표 기반)
 │   ├── snapshot.py
 │   ├── phase.py
 │   ├── vote.py
@@ -127,13 +128,19 @@ backend/
 ws://localhost:8000/ws/{game_id}
 ```
 
+`game_id`에 해당하는 게임이 **먼저** `POST /game/create`로 등록되어 있어야 한다. 없으면 연결 후 code `4000`으로 종료된다.
+
 ### REST
 ```
 GET  /health
+POST /game/create             { host_name, player_count }  →  { game_id, player_count }
 POST /game/{game_id}/chat     { sender, content, channel }
 POST /game/{game_id}/vote     { voter, voted_for }
 POST /game/{game_id}/ability  { player_name, ability, target }
 ```
+
+- `POST /game/create`: `player_count`는 4~20. 응답의 `game_id`로 이후 WS·REST 호출.
+- 알 수 없는 `game_id`로 chat/vote/ability 호출 시 **404**.
 
 > `ability: "protect"` → 서버 내부에서 `"heal"` 로 자동 매핑
 

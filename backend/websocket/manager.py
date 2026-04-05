@@ -41,7 +41,9 @@ class ConnectionManager:
         if not player_id:
             return False
 
-        game = self.registry.get_or_create(game_id)
+        game = self.registry.get(game_id)
+        if game is None:
+            return False
         player = next((p for p in game.state.players if p.id == player_id), None)
         if player is None:
             return False
@@ -95,7 +97,9 @@ class ConnectionManager:
 
         try:
             if event.event == "chat_message":
-                game = self.registry.get_or_create(game_id)
+                game = self.registry.get(game_id)
+                if game is None:
+                    return
                 payload = event.payload
                 # GameState에 채팅 히스토리 저장 (후속: RAG/멀티턴에 활용)
                 game.state.chat_history.append(
@@ -122,7 +126,9 @@ class ConnectionManager:
                     ),
                 )
             elif event.event == "vote":
-                game = self.registry.get_or_create(game_id)
+                game = self.registry.get(game_id)
+                if game is None:
+                    return
                 payload = event.payload if isinstance(event.payload, dict) else {}
                 target = payload.get("target")
                 if not target:
@@ -141,7 +147,9 @@ class ConnectionManager:
                     ),
                 )
             elif event.event == "use_ability":
-                game = self.registry.get_or_create(game_id)
+                game = self.registry.get(game_id)
+                if game is None:
+                    return
                 payload = event.payload if isinstance(event.payload, dict) else {}
                 target = payload.get("target")
                 ability = payload.get("ability")

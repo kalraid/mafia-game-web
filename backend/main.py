@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import os
+import secrets
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from pydantic import BaseModel, Field
 
 from backend.game.registry import GameRegistry
 from backend.game.runner import GameRunner
@@ -38,11 +39,24 @@ class AbilityRequest(BaseModel):
     target: str
 
 
+class CreateGameRequest(BaseModel):
+    host_name: str = Field(min_length=1, max_length=64)
+    player_count: int = Field(ge=4, le=20)
+
+
+class CreateGameResponse(BaseModel):
+    game_id: str
+    player_count: int
+
+
 def _ensure_game_runner(game_id: str) -> None:
     if game_id in _game_tasks:
         return
 
-    engine = registry.get_or_create(game_id)
+    engine = registry.get(game_id)
+    if engine is None:
+        return
+
     runner = GameRunner(game_id=game_id, engine=engine, ws_manager=ws_manager)
     task = asyncio.create_task(runner.run())
 
@@ -51,6 +65,20 @@ def _ensure_game_runner(game_id: str) -> None:
 
     task.add_done_callback(_cleanup)
     _game_tasks[game_id] = task
+
+
+@app.post("/game/create", response_model=CreateGameResponse)
+async def create_game(req: CreateGameRequest) -> CreateGameResponse:
+    game_id = f"g_{secrets.token_hex(6)}"
+    try:
+        registry.create_game(
+            game_id=game_id,
+            host_name=req.host_name.strip(),
+            player_count=req.player_count,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    return CreateGameResponse(game_id=game_id, player_count=req.player_count)
 
 
 @app.get("/health")
@@ -62,6 +90,10 @@ async def health() -> dict[str, str]:
 async def websocket_endpoint(websocket: WebSocket, game_id: str) -> None:
     player_id = websocket.query_params.get("player_id")
     await ws_manager.connect(game_id, websocket, player_id=player_id)
+    if registry.get(game_id) is None:
+        await websocket.close(code=4000, reason="unknown game")
+        ws_manager.disconnect(game_id, websocket)
+        return
     _ensure_game_runner(game_id)
     try:
         while True:
@@ -76,8 +108,10 @@ async def websocket_endpoint(websocket: WebSocket, game_id: str) -> None:
 
 @app.post("/game/{game_id}/chat")
 async def post_chat(game_id: str, req: ChatRequest) -> dict[str, str]:
+    game = registry.get(game_id)
+    if game is None:
+        raise HTTPException(status_code=404, detail="game not found")
     _ensure_game_runner(game_id)
-    game = registry.get_or_create(game_id)
 
     msg = ChatMessage(
         id=f"chat_{len(game.state.chat_history)+1}",
@@ -107,8 +141,10 @@ async def post_chat(game_id: str, req: ChatRequest) -> dict[str, str]:
 
 @app.post("/game/{game_id}/vote")
 async def post_vote(game_id: str, req: VoteRequest) -> dict[str, str]:
+    game = registry.get(game_id)
+    if game is None:
+        raise HTTPException(status_code=404, detail="game not found")
     _ensure_game_runner(game_id)
-    game = registry.get_or_create(game_id)
 
     if req.voted_for is not None:
         game.submit_vote(voter_id=req.voter, target_id=req.voted_for)
@@ -131,8 +167,10 @@ async def post_vote(game_id: str, req: VoteRequest) -> dict[str, str]:
 
 @app.post("/game/{game_id}/ability")
 async def post_ability(game_id: str, req: AbilityRequest) -> dict[str, str]:
+    game = registry.get(game_id)
+    if game is None:
+        raise HTTPException(status_code=404, detail="game not found")
     _ensure_game_runner(game_id)
-    game = registry.get_or_create(game_id)
 
     ability = req.ability
     # 프론트의 "protect" → 엔진의 "heal" 매핑

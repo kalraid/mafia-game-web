@@ -55,6 +55,12 @@ def test_websocket_vote_and_use_ability_update_game_state() -> None:
 async def _test_websocket_vote_and_use_ability_update_game_state() -> None:
     game_id = "ws1"
     registry = GameRegistry()
+    registry.create_game(game_id=game_id, host_name="player1", player_count=8)
+    game = registry.get(game_id)
+    assert game is not None
+    target_id = next(p.id for p in game.state.players if p.id != "player1")
+    ai_id = next(p.id for p in game.state.players if not p.is_human)
+
     mgr = ConnectionManager(registry=registry)
     ws = DummyWebSocket()
 
@@ -68,7 +74,6 @@ async def _test_websocket_vote_and_use_ability_update_game_state() -> None:
             {"event": "chat_message", "payload": {"content": "hi", "sender": "player1"}}
         ),
     )
-    game = registry.get_or_create(game_id)
     assert game.state.chat_history[-1].content == "hi"
 
     # vote -> updates engine votes and broadcasts vote_result
@@ -76,10 +81,10 @@ async def _test_websocket_vote_and_use_ability_update_game_state() -> None:
         game_id=game_id,
         websocket=ws,  # type: ignore[arg-type]
         raw_text=json.dumps(
-            {"event": "vote", "payload": {"target": "AI_Player_3", "sender": "player1"}}
+            {"event": "vote", "payload": {"target": target_id, "sender": "player1"}}
         ),
     )
-    assert game.get_vote_snapshot()["player1"] == "AI_Player_3"
+    assert game.get_vote_snapshot()["player1"] == target_id
     last = _decode_last_event(ws)
     assert last["event"] == "vote_result"
 
@@ -91,14 +96,14 @@ async def _test_websocket_vote_and_use_ability_update_game_state() -> None:
             {
                 "event": "use_ability",
                 "payload": {
-                    "target": "AI_Player_5",
+                    "target": target_id,
                     "ability": "investigate",
-                    "sender": "AI_1",
+                    "sender": ai_id,
                 },
             }
         ),
     )
-    assert game.get_ability_snapshot()["AI_1"]["ability"] == "investigate"
+    assert game.get_ability_snapshot()[ai_id]["ability"] == "investigate"
     last = _decode_last_event(ws)
     assert last["event"] == "ability_result"
 
@@ -111,7 +116,9 @@ async def _test_websocket_mafia_secret_channel_filtering() -> None:
     game_id = "ws_filter"
     registry = GameRegistry()
     mgr = ConnectionManager(registry=registry)
-    game = registry.get_or_create(game_id)
+    registry.create_game(game_id=game_id, host_name="host", player_count=8)
+    game = registry.get(game_id)
+    assert game is not None
     game.state.players = [
         Player(id="m1", name="Mafia", role=Role.MAFIA, team=Team.MAFIA, is_alive=True),
         Player(id="s1", name="Spy", role=Role.SPY, team=Team.NEUTRAL, is_alive=True),
