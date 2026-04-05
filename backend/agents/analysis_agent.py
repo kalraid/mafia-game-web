@@ -4,6 +4,8 @@ import asyncio
 import os
 from typing import Any, Protocol, TypedDict
 
+from backend.config import get_chat_llm, is_llm_credentials_available
+
 class _RAGLike(Protocol):
     def similarity_search(self, query: str, k: int = 3) -> list[dict]: ...
 
@@ -74,8 +76,7 @@ class GameInsightAgent:
     async def analyze_game(self, game_id: str) -> bool:
         use_llm_flag = os.getenv("MAFIA_USE_LLM", "1").strip().lower()
         llm_disabled = os.getenv("CI") is not None or use_llm_flag in {"0", "false", "no"}
-        api_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
-        if llm_disabled or not api_key:
+        if llm_disabled or not is_llm_credentials_available():
             return False
 
         if self._compiled_graph is None:
@@ -132,8 +133,7 @@ class GameInsightAgent:
         """
         use_llm_flag = os.getenv("MAFIA_USE_LLM", "1").strip().lower()
         llm_disabled = os.getenv("CI") is not None or use_llm_flag in {"0", "false", "no"}
-        api_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
-        if llm_disabled or not api_key:
+        if llm_disabled or not is_llm_credentials_available():
             return []
 
         pending = self.iter_pending_game_ids()
@@ -155,12 +155,12 @@ class GameInsightAgent:
         return analyzed_ok
 
     async def _run_llm_analysis(self, game_id: str) -> bool:
-        from langchain_anthropic import ChatAnthropic
         from langchain_core.messages import HumanMessage, SystemMessage
         from langchain_core.tools import tool
 
-        model_name = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4")
-        llm = ChatAnthropic(model=model_name, temperature=0, api_key=os.getenv("ANTHROPIC_API_KEY", "").strip())
+        llm = get_chat_llm(temperature=0)
+        if llm is None:
+            return False
 
         @tool
         def read_game_record(game_id: str) -> str:

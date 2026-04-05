@@ -7,7 +7,17 @@
 
 ## 미처리 — Gemini 요청 필요
 
-_(현재 없음)_
+### [WT-3] `/health`의 `llm_provider` 표시 (선택, WORK_ORDER C-12-4 보조)
+
+**배경 (Cursor 구현 완료)**  
+- `GET /health` 응답에 `llm_provider` 추가: `anthropic` | `azure` | `disabled` | `fallback`  
+- `MAFIA_USE_LLM=0` → `disabled`, 자격 증명 없으면 `fallback`, Azure/Anthropic 각각 설정 시 해당 값.
+
+**Gemini 작업 요청 (frontend/)**  
+1. (선택) 로비 또는 사이드바에 현재 백엔드 LLM 모드를 한 줄로 표시 (`st.caption` 등).  
+2. `GET /health`에서 `llm_provider` 키를 읽어 `st.session_state`에 캐시해도 됨.
+
+**참조**: `docs/planning/WORK_ORDER_CURSOR.md` — C-12-4, `backend/README.md`
 
 ---
 

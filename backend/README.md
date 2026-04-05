@@ -46,8 +46,14 @@ uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
 ## 환경변수
 
 ```env
-ANTHROPIC_API_KEY=          # LLM API 키 (없으면 Fallback 모드)
+MAFIA_LLM_PROVIDER=anthropic   # anthropic | azure
+ANTHROPIC_API_KEY=          # Anthropic 모드 시
 ANTHROPIC_MODEL=claude-sonnet-4
+# Azure OpenAI (MAFIA_LLM_PROVIDER=azure)
+AOAI_ENDPOINT=
+AOAI_API_KEY=
+AOAI_API_VERSION=2024-02-01
+AOAI_DEPLOY_GPT4O=          # 채팅 배포 이름
 MAFIA_USE_LLM=1              # 0: LLM 비활성화
 REDIS_URL=redis://localhost:6379
 MAFIA_USE_REDIS_CHECKPOINTER=0  # 1: Redis Checkpointer 활성화
@@ -80,6 +86,7 @@ backend/
 ├── README.md              ← 이 파일 (Cursor 관리)
 ├── Dockerfile
 ├── main.py                ← FastAPI 앱 진입점
+├── config.py              ← LLM Provider(Anthropic/Azure) 중앙 설정
 ├── agents/
 │   ├── graph.py           ← LangGraph AgentGraph
 │   ├── player_agent.py    ← 개별 AI Agent (LLM 연동)
@@ -132,7 +139,9 @@ ws://localhost:8000/ws/{game_id}
 
 ### REST
 ```
-GET  /health                  → { status, rag_status }  # rag_status: ok | error | unknown
+GET  /health                  → { status, rag_status, llm_provider }
+                                # rag_status: ok | error | unknown
+                                # llm_provider: anthropic | azure | disabled | fallback
 POST /game/create             { host_name, player_count }  →  { game_id, player_count }
 POST /game/{game_id}/chat     { sender, content, channel }
 POST /game/{game_id}/vote     { voter, voted_for }

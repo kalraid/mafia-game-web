@@ -224,8 +224,9 @@ class GameRunner:
             # 2) analyze (LLM 활성일 때만)
             use_llm_flag = os.getenv("MAFIA_USE_LLM", "1").strip().lower()
             llm_disabled = os.getenv("CI") is not None or use_llm_flag in {"0", "false", "no"}
-            api_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
-            if llm_disabled or not api_key:
+            from backend.config import is_llm_credentials_available
+
+            if llm_disabled or not is_llm_credentials_available():
                 return
 
             from backend.agents.analysis_agent import GameInsightAgent

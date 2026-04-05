@@ -8,6 +8,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
+from backend.config import get_llm_provider_health
 from backend.game.registry import GameRegistry
 from backend.websocket.manager import ConnectionManager
 from backend.game.snapshot import build_game_state_payload
@@ -114,7 +115,11 @@ async def create_game(req: CreateGameRequest) -> CreateGameResponse:
 
 @app.get("/health")
 async def health() -> dict[str, str]:
-    return {"status": "ok", "rag_status": _rag_status_for_health()}
+    return {
+        "status": "ok",
+        "rag_status": _rag_status_for_health(),
+        "llm_provider": get_llm_provider_health(),
+    }
 
 
 @app.websocket("/ws/{game_id}")

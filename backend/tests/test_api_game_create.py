@@ -61,3 +61,4 @@ def test_health_includes_rag_status() -> None:
     data = resp.json()
     assert data["status"] == "ok"
     assert data["rag_status"] in ("ok", "error", "unknown")
+    assert data["llm_provider"] in ("anthropic", "azure", "disabled", "fallback")

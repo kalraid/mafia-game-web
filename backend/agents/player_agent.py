@@ -11,6 +11,7 @@ from backend.rag.retriever import SituationDescription, StrategyRetriever
 from backend.rag.store import RAGStore
 from backend.models.game import GameState, Player
 from backend.models.game import Role, Phase
+from backend.config import get_chat_llm
 from backend.mcp.tools import MCPGameTools
 
 
@@ -217,21 +218,13 @@ class PlayerAgent:
         if llm_disabled:
             return fallback(), False
 
-        api_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
-        if not api_key:
+        llm = get_chat_llm(temperature=0)
+        if llm is None:
             return fallback(), False
 
-        # Lazy import to avoid hard failure when env doesn't have optional deps
         try:
-            from langchain_anthropic import ChatAnthropic
             from langchain_core.messages import SystemMessage, HumanMessage
             from langchain_core.tools import tool
-        except Exception:
-            return fallback(), False
-
-        try:
-            model_name = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4")
-            llm = ChatAnthropic(model=model_name, temperature=0, api_key=api_key)
         except Exception:
             return fallback(), False
 
