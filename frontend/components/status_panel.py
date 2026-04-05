@@ -253,13 +253,23 @@ def draw_status_panel():
     # RAG Status and Debug Panel (Task G-12)
     st.divider()
     
-    rag_status = st.session_state.get("rag_status", "unknown")
-    if rag_status == "ok":
-        st.caption("🧠 RAG Status: Active ✅")
-    elif rag_status == "error":
-        st.caption("🧠 RAG Status: Error ❌")
-    else:
-        st.caption("🧠 RAG Status: Unknown ❓")
+    col1, col2 = st.columns([2, 3])
+    with col1:
+        st.caption("🌐 Server")
+        if st.session_state.get("server_connected", False):
+            st.markdown("![Connected](https://img.shields.io/badge/Status-Connected-brightgreen?style=flat-square)")
+        else:
+            st.markdown("![Disconnected](https://img.shields.io/badge/Status-Disconnected-red?style=flat-square)")
+    
+    with col2:
+        st.caption("🧠 RAG")
+        rag_status = st.session_state.get("rag_status", "unknown")
+        if rag_status == "ok":
+            st.markdown("![Active](https://img.shields.io/badge/RAG-Active-brightgreen?style=flat-square)")
+        elif rag_status == "error":
+            st.markdown("![Error](https://img.shields.io/badge/RAG-Error-red?style=flat-square)")
+        else:
+            st.markdown("![Unknown](https://img.shields.io/badge/RAG-Unknown-lightgrey?style=flat-square)")
 
     with st.expander("🔍 RAG 컨텍스트 (디버그)"):
         rag_ctx = game_state.get("rag_context", [])
