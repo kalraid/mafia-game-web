@@ -42,6 +42,10 @@
 | C-10 | analyze_pending SCAN 배치 | `d691e80` |
 | I-8 | `POST /game/create` + `composition.py` 인원별 직업 구성 + Registry get/create 분리 | `1baa68f` |
 | C-5 | Redis Checkpointer 폴백 제거 — 실패 시 raise (폴백 없음) | `5b557a0` |
+| C-12-1 | `backend/config.py` — LLM_CONFIG + `get_chat_llm()` 팩토리 | `f25160f` |
+| C-12-2 | `player_agent.py` — `get_chat_llm()` 교체 | `f25160f` |
+| C-12-3 | `analysis_agent.py` — `get_chat_llm()` 교체 | `f25160f` |
+| C-12-4 | `GET /health` — `llm_provider` 필드 추가 | `f25160f` |
 
 ---
 
@@ -487,9 +491,9 @@ docker-compose.yml 변경이 필요하면 **직접 수정 말고** Claude에게 
 
 ---
 
-## 🆕 신규 작업
+## ~~🆕 신규 작업~~ ✅ C-12 완료
 
-### [C-12] LLM Provider config 레이어 추가 — Azure OpenAI / Anthropic 통합 지원
+### ~~[C-12]~~ ✅ LLM Provider config 레이어 완료 (`f25160f`)
 
 > **배경**  
 > 현재 백엔드는 `ANTHROPIC_API_KEY` + `ChatAnthropic` 단일 경로만 지원.  

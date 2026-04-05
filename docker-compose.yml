@@ -6,7 +6,7 @@ version: "3.9"
 # Dockerfile 작성: Cursor(backend/Dockerfile), Gemini(frontend/Dockerfile)
 # ============================================================
 #
-# 로지컸 실행 방법:
+# 로컬 실행 방법:
 #   미리 준비: .env.example 복사 → .env 편집 (ANTHROPIC_API_KEY 선택, 없는 경우 Fallback 모드)
 #   실행:  docker-compose up --build
 #   접속:  프론트 http://localhost:8501
@@ -59,6 +59,21 @@ services:
       # Redis 내부 컨테이너 통신은 service명 사용
       - REDIS_URL=redis://redis:6379
       - MAFIA_USE_REDIS_CHECKPOINTER=1
+      # LLM Provider — .env 또는 docker run -e 로 주입
+      # MAFIA_LLM_PROVIDER=anthropic (기본) | azure
+      - MAFIA_LLM_PROVIDER=${MAFIA_LLM_PROVIDER:-anthropic}
+      # Anthropic
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-sonnet-4}
+      # Azure OpenAI (MAFIA_LLM_PROVIDER=azure 시 사용)
+      - AOAI_ENDPOINT=${AOAI_ENDPOINT:-}
+      - AOAI_API_KEY=${AOAI_API_KEY:-}
+      - AOAI_API_VERSION=${AOAI_API_VERSION:-2024-02-01}
+      - AOAI_DEPLOY_GPT4O=${AOAI_DEPLOY_GPT4O:-}
+      - AOAI_DEPLOY_GPT4O_MINI=${AOAI_DEPLOY_GPT4O_MINI:-}
+      - AOAI_DEPLOY_EMBED_3_LARGE=${AOAI_DEPLOY_EMBED_3_LARGE:-}
+      - AOAI_DEPLOY_EMBED_3_SMALL=${AOAI_DEPLOY_EMBED_3_SMALL:-}
+      - AOAI_DEPLOY_EMBED_ADA=${AOAI_DEPLOY_EMBED_ADA:-}
     restart: unless-stopped
 
   # ----------------------------------------------------------
@@ -70,8 +85,7 @@ services:
   #   Docker 내부 hostname(backend)이 아닌, 브라우저가 접근 가능한 localhost 사용.
   #   서비스를 다른 서버로 옮김 시에만 WS_URL 변경 필요.
   # ⚠️ BACKEND_URL 주의:
-  #   status_panel.py 등 REST 호출이 localhost:8000 하드코딩 중.
-  #   Gemini 타스크 G-10 (BACKEND_URL 환경변수화) 완료 시 업데이트.
+  #   G-11 완료로 환경변수화 됨. 원격 서버 배포 시 아래 값 변경.
   # ----------------------------------------------------------
   frontend:
     build:

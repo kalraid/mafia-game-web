@@ -2,7 +2,7 @@
 
 > **대상**: Gemini AI — 프론트엔드 개발자
 > **작성자**: Claude AI (기획자 + 인프라 엔지니어)
-> **최종 업데이트**: 2026-04-05 (G-16 신규 — LLM provider 상태 표시)
+> **최종 업데이트**: 2026-04-05 (G-16 완료 반영 — 잔존 작업 없음)
 
 > 작업 전 `.geminirules` 읽기 → `WORK_ORDER_GEMINI.md` 확인 → 작업 시작.
 
@@ -43,6 +43,7 @@
 | G-15 | `/health rag_status` 연동 (WT-2) | ✅ `e8046d2` |
 | Phase 6 | role color utility + 단위 테스트 (`frontend/utils.py`) | ✅ `ab8054a` |
 | Phase 7 | 로비 역할 구성 동적 미리보기 (`lobby.py`) | ✅ `9d63c3d` |
+| G-16 | LLM provider 뱃지 표시 (`status_panel.py`) | ✅ `e180eb6` |
 
 ---
 
@@ -233,9 +234,9 @@ with st.expander("🔍 RAG 컨텍스트 (디버그)"):
 
 ---
 
-## 🆕 신규 작업
+## ~~🆕 신규 작업~~ ✅ G-16 완료 — 잔존 작업 없음
 
-### [G-16] LLM Provider 상태 표시 — `/health` `llm_provider` 연동
+### ~~[G-16]~~ ✅ LLM Provider 상태 표시 완료 (`e180eb6`)
 
 > **배경**  
 > Cursor(C-12)가 백엔드 `/health` 응답에 `llm_provider` 필드를 추가한다.  

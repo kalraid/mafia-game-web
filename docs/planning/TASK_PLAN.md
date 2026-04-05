@@ -2,8 +2,8 @@
 
 > **문서 버전**: v2.3
 > **최초 작성일**: 2026-03-18
-> **최종 업데이트**: 2026-04-05 (C-12/G-16 신규 — LLM Provider config 레이어)
-> **기준 커밋**: `9d63c3d`
+> **최종 업데이트**: 2026-04-05 (C-12/G-16 완료, .env+docker-compose AOAI 항목 추가)
+> **기준 커밋**: `e180eb6`
 
 ---
 
@@ -189,11 +189,7 @@ _(시급 이슈 없음)_
 
 ### 🟡 신규 작업
 
-| # | 이슈 | 담당 | 조치 |
-|---|------|------|------|
-| I-9 | LLM Provider 환경변수 분기 미지원 (Anthropic 전용 고정) | Cursor | **C-12** |
-| I-10 | 프론트에 LLM provider 상태 미표시 | Gemini | **G-16** (C-12 선행) |
-| I-9 인프라 | `.env.example` / `docker-compose.yml` AOAI_* 항목 미추가 | **Claude** | C-12 연동 시 처리 |
+_(현재 없음)_
 
 ### ✅ 해소된 이슈
 
@@ -214,6 +210,9 @@ _(시급 이슈 없음)_
 | ~~I-8~~ | GameRegistry 동적 로비 + `POST /game/create` + 인원별 직업 구성 (`1baa68f`) |
 | ~~I-2~~ | Redis Checkpointer 폴백 제거 (C-5, `5b557a0`) |
 | ~~Phase 8~~ | GameInsightAgent 전체 (C-10, `e531163`~`d691e80`) |
+| ~~I-9~~ | LLM Provider config 레이어 — `backend/config.py` (C-12, `f25160f`) |
+| ~~I-10~~ | LLM provider 뱃지 표시 (G-16, `e180eb6`) |
+| ~~I-9 인프라~~ | `.env.example` / `docker-compose.yml` AOAI_* 추가 (Claude) |
 
 ---
 
@@ -221,20 +220,18 @@ _(시급 이슈 없음)_
 
 ### Claude
 ```
-[C-12 연동] .env.example에 MAFIA_LLM_PROVIDER / AOAI_* 항목 추가
-[C-12 연동] docker-compose.yml backend environment에 MAFIA_LLM_PROVIDER / AOAI_* pass-through 추가
+✅ .env.example AOAI_* 항목 추가 완료
+✅ docker-compose.yml AOAI_* pass-through 추가 완료
 ```
 
 ### Cursor
 ```
-WORK_ORDER_CURSOR.md 참조
-C-12: backend/config.py 신규 + player_agent / analysis_agent / health 엔드포인트 교체
+현재 지시된 작업 없음 — 대기 중
 ```
 
 ### Gemini
 ```
-WORK_ORDER_GEMINI.md 참조
-G-16: /health llm_provider 읽어 사이드바 뱃지 표시 (C-12 완료 후 진행)
+현재 지시된 작업 없음 — 대기 중
 ```
 
 ---
