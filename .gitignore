@@ -37,6 +37,8 @@ coverage.xml
 # ChromaDB / RAG 벡터 DB
 # ============================================================
 backend/rag/chroma_db/
+# cwd=backend 일 때 ./backend/... 오해로 생기는 중첩 디렉터리
+backend/backend/
 *.chroma
 
 # ============================================================

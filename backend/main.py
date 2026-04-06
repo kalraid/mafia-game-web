@@ -32,6 +32,7 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
 from backend.config import get_llm_provider_health
+from backend.paths import resolve_chroma_persist_dir
 from backend.game.registry import GameRegistry
 from backend.pod import POD_ID
 from backend.websocket.manager import ConnectionManager
@@ -70,12 +71,7 @@ def _rag_status_for_health() -> str:
     except ImportError:
         return "unknown"
 
-    raw = os.getenv("CHROMA_PERSIST_DIR", "backend/rag/chroma_db")
-    path = Path(raw)
-    if not path.is_absolute():
-        path = (Path(__file__).resolve().parent.parent / path).resolve()
-    else:
-        path = path.resolve()
+    path = Path(resolve_chroma_persist_dir())
 
     if not path.exists():
         return "unknown"

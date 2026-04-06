@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from backend.agents.persona import AgentPersona
+from backend.paths import resolve_chroma_persist_dir, resolve_rag_knowledge_dir
 from backend.rag.retriever import SituationDescription, StrategyRetriever
 from backend.rag.store import RAGStore
 from backend.models.game import GameState, Player
@@ -195,13 +196,13 @@ class PlayerAgent:
             return PlayerAgent._rag_retriever
 
         try:
-            persist_dir = os.getenv("CHROMA_PERSIST_DIR", "./backend/rag/chroma_db")
+            persist_dir = resolve_chroma_persist_dir()
             embedding_model = os.getenv(
                 "EMBEDDING_MODEL",
                 "sentence-transformers/paraphrase-multilingual-mpnet-base-v2",
             )
             store = RAGStore(persist_dir=persist_dir, embedding_model=embedding_model)
-            knowledge_dir = os.getenv("RAG_KNOWLEDGE_DIR", "./docs/rag_knowledge")
+            knowledge_dir = resolve_rag_knowledge_dir()
             store.index_from_disk(knowledge_root=knowledge_dir)
             PlayerAgent._rag_retriever = StrategyRetriever(store=store)
             return PlayerAgent._rag_retriever

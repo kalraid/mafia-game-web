@@ -8,6 +8,7 @@ from backend.agents.graph import AgentGraph
 from backend.agents.player_agent import AgentOutput
 from backend.agents.pool import AgentPool
 from backend.game.engine import GameEngine
+from backend.paths import resolve_chroma_persist_dir
 from backend.game.snapshot import build_game_state_payload, role_to_korean, ui_phase
 from backend.models.chat import ChatMessage
 from backend.models.game import Phase
@@ -303,7 +304,7 @@ class GameRunner:
             from backend.agents.analysis_agent import GameInsightAgent
             from backend.rag.store import RAGStore
 
-            persist_dir = os.getenv("CHROMA_PERSIST_DIR", "./backend/rag/chroma_db")
+            persist_dir = resolve_chroma_persist_dir()
             embedding_model = os.getenv(
                 "EMBEDDING_MODEL",
                 "sentence-transformers/paraphrase-multilingual-mpnet-base-v2",
