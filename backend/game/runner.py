@@ -177,13 +177,17 @@ class GameRunner:
             if e.type != "player_death":
                 continue
 
-            player_name = e.payload.get("player")
+            # 엔진/roles 이벤트의 "player" 값은 플레이어 id (과거 name 혼용 방지)
+            player_id = str(e.payload.get("player") or "")
             role_value = e.payload.get("role")
             cause_value = e.payload.get("cause")
             death_round = e.payload.get("round", "")
 
-            # 프론트 result 페이지용 확장 필드 기록
-            self._death_info[str(player_name)] = {
+            dead = next((p for p in self.engine.state.players if p.id == player_id), None)
+            display_name = dead.name if dead is not None else player_id
+
+            # 프론트 result 페이지용 확장 필드 기록 (키는 항상 player id)
+            self._death_info[player_id] = {
                 "death_round": death_round,
                 "death_cause": cause_value,
             }
@@ -199,7 +203,12 @@ class GameRunner:
                 self.game_id,
                 ServerToClientEvent(
                     event="player_death",
-                    payload={"player": player_name, "role": role_kor, "cause": cause_value},
+                    payload={
+                        "player_id": player_id,
+                        "player": display_name,
+                        "role": role_kor,
+                        "cause": cause_value,
+                    },
                 ),
             )
 

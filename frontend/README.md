@@ -116,8 +116,8 @@ frontend/
 | `chat_broadcast` | 채팅 히스토리 추가 |
 | `phase_change` | Phase 표시 + 테마 전환 |
 | `game_state_update` | 전체 상태 갱신 |
-| `player_death` | 사망 오버레이 적용 |
-| `vote_result` | 투표 수 업데이트 |
+| `player_death` | 사망 오버레이 적용 (`player_id` + 표시용 `player` 이름) |
+| `vote_result` | 투표 수 업데이트 (`votes_received`: 플레이어 id 기준 득표 집계) |
 | `ability_result` | 토스트 메시지 |
 | `game_over` | 결과 화면 전환 |
 

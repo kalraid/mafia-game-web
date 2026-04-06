@@ -57,6 +57,31 @@ def test_build_game_state_payload_omits_empty_rag_context() -> None:
     assert "rag_context" not in payload
 
 
+def test_build_game_state_payload_includes_id_and_trust_score() -> None:
+    state = GameState(
+        game_id="g4",
+        phase=Phase.DAY_CHAT,
+        round=1,
+        timer_seconds=30,
+        players=[
+            Player(
+                id="p1",
+                name="홍길동",
+                role=Role.CITIZEN,
+                team=Team.CITIZEN,
+                is_alive=True,
+                trust_score=0.73,
+            ),
+        ],
+    )
+    engine = GameEngine(state)
+    payload = build_game_state_payload(engine)
+    row = payload["players"][0]
+    assert row["id"] == "p1"
+    assert row["name"] == "홍길동"
+    assert row["trust_score"] == 0.73
+
+
 def test_build_game_state_payload_debug_supervisor_and_reports() -> None:
     state = GameState(
         game_id="g3",

@@ -58,10 +58,12 @@ def build_game_state_payload(
         votes = int(votes_counter.get(p.id, 0))
 
         player_dict: Dict[str, Any] = {
+            "id": p.id,
             "name": p.name,
             "is_alive": p.is_alive,
             "role": role_to_korean(p.role),
             "votes": votes,
+            "trust_score": p.trust_score,
             "is_silent": False,
             # 프론트 result 페이지용 확장 필드
             "death_round": death_info.get(p.id, {}).get("death_round", ""),

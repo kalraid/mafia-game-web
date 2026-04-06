@@ -63,23 +63,34 @@ def handle_message(message):
             st.session_state.game_state["chat_history"].append(payload)
             return True # State changed
         elif event == "player_death":
-            dead_player_name = payload.get("player")
             dead_player_role = payload.get("role")
-            
+            dead_id = payload.get("player_id") or payload.get("player")
+            dead_name = payload.get("player")
+
             if "players" in st.session_state.game_state:
                 for p in st.session_state.game_state["players"]:
-                    if p["name"] == dead_player_name:
+                    pid = p.get("id", p.get("name"))
+                    if dead_id and pid == dead_id:
                         p["is_alive"] = False
-                        p["role"] = dead_player_role # Reveal role on death
+                        p["role"] = dead_player_role
+                        break
+                    if dead_name and p.get("name") == dead_name:
+                        p["is_alive"] = False
+                        p["role"] = dead_player_role
                         break
             return True # State changed
         elif event == "vote_result":
-            # Payload is expected to be a dict mapping player names to vote counts
-            # e.g., {"player1": 2, "player2": 1, "player3": 0}
-            vote_counts = payload.get("votes", {})
+            # votes_received: target_player_id -> 득표 수 (권장). 없으면 voter->target 맵에서 계산.
+            vote_tally = payload.get("votes_received")
+            if not vote_tally and isinstance(payload.get("votes"), dict):
+                from collections import Counter
+
+                vote_tally = dict(Counter(t for t in payload["votes"].values() if t))
+            vote_tally = vote_tally or {}
             if "players" in st.session_state.game_state:
                 for p in st.session_state.game_state["players"]:
-                    p["votes"] = vote_counts.get(p["name"], 0)
+                    pid = p.get("id", p.get("name"))
+                    p["votes"] = int(vote_tally.get(pid, vote_tally.get(p.get("name"), 0)))
             return True # State changed
         elif event == "ability_result":
             payload = data.get("payload", {})

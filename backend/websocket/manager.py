@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 from datetime import datetime
 import json
 from typing import Dict, Optional, Set
@@ -135,13 +136,16 @@ class ConnectionManager:
                     return
                 voter_id = payload.get("sender") or payload.get("voter") or "unknown"
                 game.submit_vote(voter_id=str(voter_id), target_id=str(target))
+                snap = game.get_vote_snapshot()
+                tally = Counter(str(t) for t in snap.values() if t)
                 await self.broadcast(
                     game_id,
                     ServerToClientEvent(
                         event="vote_result",
                         payload={
                             "target": target,
-                            "votes": game.get_vote_snapshot(),
+                            "votes": snap,
+                            "votes_received": dict(tally),
                             "executed": False,
                         },
                     ),
