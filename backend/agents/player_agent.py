@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import os
 import random
+from collections import Counter
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
@@ -29,6 +30,54 @@ class AgentDecision(BaseModel):
     ability_target: Optional[str] = None
     reasoning: str
     confidence: float = Field(default=0.5, ge=0.0, le=1.0)
+
+
+def merge_agent_decisions_self_consistency(decisions: List[AgentDecision], phase: Phase) -> AgentDecision:
+    """self-consistency: N회 structured 출력을 페이즈별 규칙으로 병합한다."""
+    valid = [d for d in decisions if isinstance(d, AgentDecision)]
+    if not valid:
+        return AgentDecision(reasoning="self_consistency: empty", confidence=0.0)
+    if len(valid) == 1:
+        return valid[0]
+
+    conf = sum(d.confidence for d in valid) / len(valid)
+
+    if phase in (Phase.DAY_VOTE, Phase.FINAL_VOTE):
+        votes = [d.vote_target for d in valid if d.vote_target]
+        vt = Counter(votes).most_common(1)[0][0] if votes else None
+        return AgentDecision(
+            speech=None,
+            vote_target=vt,
+            ability=None,
+            ability_target=None,
+            reasoning=f"self_consistency: vote majority n={len(valid)}",
+            confidence=conf,
+        )
+
+    if phase == Phase.NIGHT_ABILITY:
+        pairs = [(d.ability, d.ability_target) for d in valid if d.ability and d.ability_target]
+        if pairs:
+            (ab, tg), _ = Counter(pairs).most_common(1)[0]
+        else:
+            ab, tg = valid[0].ability, valid[0].ability_target
+        return AgentDecision(
+            speech=None,
+            vote_target=None,
+            ability=ab,
+            ability_target=tg,
+            reasoning=f"self_consistency: ability majority n={len(valid)}",
+            confidence=conf,
+        )
+
+    best = max(valid, key=lambda d: len((d.speech or "").strip()))
+    return AgentDecision(
+        speech=best.speech,
+        vote_target=best.vote_target,
+        ability=best.ability,
+        ability_target=best.ability_target,
+        reasoning=f"self_consistency: speech pick n={len(valid)}",
+        confidence=conf,
+    )
 
 
 @dataclass
@@ -64,6 +113,63 @@ class AgentOutput:
     internal_notes: Optional[str]
     rag_context: List[dict] = field(default_factory=list)
     confidence: Optional[float] = None
+
+
+def _phase_few_shot_block(phase: Phase) -> str:
+    """페이즈별 짧은 few-shot 힌트(GAP-PE-01). 스키마·톤을 고정하지 않고 참고용으로만 쓴다."""
+    if phase == Phase.DAY_CHAT:
+        return (
+            "\n\n[참고 예시 — 페르소나·RAG·채팅 맥락에 맞게 바꿀 것]\n"
+            '- speech: "라운드가 낮이라 정보는 적지만, 2번은 발언이 짧아 한 번 더 듣고 싶습니다.", '
+            "vote/ability: null, reasoning: 짧은 근거, confidence: 0.3~0.6"
+        )
+    if phase in (Phase.DAY_VOTE, Phase.FINAL_VOTE):
+        return (
+            "\n\n[참고 예시]\n"
+            '- vote_target: alive player_id 하나, speech: null, reasoning: "의심 근거 한 줄", confidence: 0.4~0.8'
+        )
+    if phase == Phase.NIGHT_MAFIA:
+        return (
+            "\n\n[참고 예시 — 마피아 비밀 채널]\n"
+            '- speech: "오늘은 N번 정리하는 게 어떨까. 이유는 …", 나머지 필드 null'
+        )
+    if phase == Phase.NIGHT_ABILITY:
+        return (
+            "\n\n[참고 예시]\n"
+            '- ability: 허용 목록 중 하나, ability_target: player_id, speech/vote: null, reasoning: 한 줄'
+        )
+    return ""
+
+
+def _structured_exemplar_block(phase: Phase) -> str:
+    """스키마 고정용 JSON 형태 exemplar(값은 예시)."""
+    if phase == Phase.DAY_CHAT:
+        return (
+            '\n\n[출력 exemplar — 필드명·null 규칙 참고, 내용은 반드시 상황에 맞게]\n'
+            '{"speech":"2번 발언이 짧아 추적이 필요해 보입니다.","vote_target":null,'
+            '"ability":null,"ability_target":null,"reasoning":"라운드 초반 정보만으로 약한 의심",'
+            '"confidence":0.42}'
+        )
+    if phase in (Phase.DAY_VOTE, Phase.FINAL_VOTE):
+        return (
+            '\n\n[출력 exemplar]\n'
+            '{"speech":null,"vote_target":"p3","ability":null,"ability_target":null,'
+            '"reasoning":"3번 발언이 전 라운드와 모순됨","confidence":0.68}'
+        )
+    if phase == Phase.NIGHT_MAFIA:
+        return (
+            '\n\n[출력 exemplar]\n'
+            '{"speech":"오늘은 p2 쪽으로 정리하자. 시민 쪽에서 발화가 많았음.",'
+            '"vote_target":null,"ability":null,"ability_target":null,"reasoning":"합의 제안",'
+            '"confidence":0.55}'
+        )
+    if phase == Phase.NIGHT_ABILITY:
+        return (
+            '\n\n[출력 exemplar]\n'
+            '{"speech":null,"vote_target":null,"ability":"investigate","ability_target":"p4",'
+            '"reasoning":"정보 부족 구간에서 4번 검증","confidence":0.5}'
+        )
+    return ""
 
 
 class PlayerAgent:
@@ -121,7 +227,11 @@ class PlayerAgent:
                     f"my_role={my_role}. directive_hint={directive_hint[:200]}"
                 )
                 rag_context = retriever.retrieve_strategies(
-                    situation=SituationDescription(text=situation_text),
+                    situation=SituationDescription(
+                        text=situation_text,
+                        player_role=my_role,
+                        player_team=self.player.team.value,
+                    ),
                     k=3,
                 )
         except Exception:
@@ -280,15 +390,31 @@ class PlayerAgent:
             return fallback(), False, rag_context
 
         # Phase별 간단한 출력 스키마 유도 (structured output 경로용)
+        sc_n_raw = os.getenv("MAFIA_SELF_CONSISTENCY_N", "1").strip() or "1"
+        try:
+            sc_n = max(1, min(5, int(sc_n_raw)))
+        except ValueError:
+            sc_n = 1
+        sc_hint = ""
+        if sc_n > 1:
+            sc_hint = (
+                f"\n\n동일 입력에 대해 내부적으로 {sc_n}개 초안을 비교한 뒤 합의된 행동만 반영한다고 가정하고, "
+                "한 가지 일관된 JSON만 출력하라."
+            )
+
         structured_system_prompt = (
             "너는 AI 마피아 게임 에이전트다. 아래 지시에 따라 반드시 JSON 스키마로만 답한다."
             " 말투는 persona의 speech_style을 따른다."
+            + _phase_few_shot_block(phase)
+            + _structured_exemplar_block(phase)
+            + sc_hint
         )
 
         # Tool 호출 경로용 프롬프트
         tool_system_prompt = (
             "너는 AI 마피아 게임 에이전트다. 반드시 제공된 tool을 호출해 게임 상태를 변경하라."
             " tool 외의 일반 텍스트는 출력하지 말라."
+            " 예: 낮 채팅이면 send_chat(content=...) 한 번 호출."
             " report_to_supervisor(report)는 슈퍼바이저 전략 반영용 선택 도구이며, 남용하지 말라."
         )
 
@@ -474,9 +600,25 @@ class PlayerAgent:
                 if decision is not None and executed_any:
                     return decision, True, rag_context
 
-            structured_llm = llm.with_structured_output(AgentDecision)
             messages = [SystemMessage(content=structured_system_prompt), HumanMessage(content=str(human_prompt))]
-            decision = await asyncio.to_thread(structured_llm.invoke, messages)
+
+            if sc_n <= 1:
+                structured_llm = llm.with_structured_output(AgentDecision)
+                decision = await asyncio.to_thread(structured_llm.invoke, messages)
+            else:
+                try:
+                    temp = float(os.getenv("MAFIA_SELF_CONSISTENCY_TEMP", "0.55"))
+                except ValueError:
+                    temp = 0.55
+                llm_sc = get_chat_llm(temperature=temp) or llm
+                structured_sc = llm_sc.with_structured_output(AgentDecision)
+
+                async def _one_sc() -> AgentDecision:
+                    return await asyncio.to_thread(structured_sc.invoke, messages)
+
+                samples = await asyncio.gather(*(_one_sc() for _ in range(sc_n)))
+                decision = merge_agent_decisions_self_consistency(list(samples), phase)
+
             return decision, False, rag_context
         except Exception:
             return fallback(), False, rag_context

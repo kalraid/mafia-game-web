@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import re
 import uuid
 from pathlib import Path
@@ -50,7 +51,64 @@ class RAGStore:
             metadatas=list(metadatas) if metadatas is not None else None,
         )
 
-    def similarity_search(self, query: str, k: int = 3) -> List[dict]:
+    @staticmethod
+    def _cosine_sim(a: List[float], b: List[float]) -> float:
+        dot = sum(x * y for x, y in zip(a, b))
+        na = math.sqrt(sum(x * x for x in a)) + 1e-12
+        nb = math.sqrt(sum(x * x for x in b)) + 1e-12
+        return float(dot / (na * nb))
+
+    @staticmethod
+    def _mmr_pick(
+        query_emb: List[float],
+        candidates: List[dict],
+        k: int,
+        lambda_mult: float,
+    ) -> List[dict]:
+        """Maximal Marginal Relevance: 관련성과 후보 간 중복을 함께 고려해 k건 선택."""
+        if k <= 0 or not candidates:
+            return []
+        emb_key = "_emb"
+        rel = []
+        for c in candidates:
+            e = c.get(emb_key)
+            if not e:
+                rel.append(0.0)
+            else:
+                rel.append(RAGStore._cosine_sim(query_emb, e))
+        selected: List[int] = []
+        remaining = set(range(len(candidates)))
+        while len(selected) < min(k, len(candidates)) and remaining:
+            best_i = None
+            best_score = -1e9
+            for i in remaining:
+                div = 0.0
+                if selected:
+                    ei = candidates[i].get(emb_key) or []
+                    div = max(
+                        RAGStore._cosine_sim(ei, candidates[j].get(emb_key) or [])
+                        for j in selected
+                    )
+                mmr = lambda_mult * rel[i] - (1.0 - lambda_mult) * div
+                if mmr > best_score:
+                    best_score = mmr
+                    best_i = i
+            if best_i is None:
+                break
+            selected.append(best_i)
+            remaining.discard(best_i)
+        return [candidates[i] for i in selected]
+
+    def similarity_search(
+        self,
+        query: str,
+        k: int = 3,
+        *,
+        where: dict | None = None,
+        fetch_k: int | None = None,
+        use_mmr: bool = False,
+        mmr_lambda: float = 0.5,
+    ) -> List[dict]:
         try:
             if self.collection.count() == 0:
                 return []
@@ -58,22 +116,59 @@ class RAGStore:
             logger.warning("RAG count() 실패 (query=%r): %s", query, e)
 
         query_embedding: List[float] = self.embedder.encode([query], convert_to_numpy=False)[0]  # type: ignore[index]
-        try:
-            result = self.collection.query(
-                query_embeddings=[query_embedding],
-                n_results=k,
-                include=["documents", "metadatas", "distances"],
-            )
-        except Exception as e:
-            logger.warning("RAG 검색 실패 (query=%r): %s", query, e)
-            return []
+        n_target = max(1, k)
+        n_fetch = fetch_k if fetch_k is not None else n_target
+        if use_mmr:
+            n_fetch = max(n_fetch, n_target * 4, n_target + 4)
 
-        docs: List[dict] = []
-        metadatas = result.get("metadatas", [[]])[0] or []
-        distances = result.get("distances", [[]])[0] or []
-        documents = result.get("documents", [[]])[0] or []
-        for meta, dist, text in zip(metadatas, distances, documents):
-            docs.append({"metadata": meta, "score": float(dist), "text": text})
+        include = ["documents", "metadatas", "distances"]
+        if use_mmr:
+            include.append("embeddings")
+
+        def _run_query(w: dict | None, n: int) -> List[dict]:
+            try:
+                kwargs = dict(
+                    query_embeddings=[query_embedding],
+                    n_results=min(n, max(1, self.collection.count())),
+                    include=include,
+                )
+                if w is not None:
+                    kwargs["where"] = w
+                result = self.collection.query(**kwargs)
+            except Exception as e:
+                logger.warning("RAG 검색 실패 (where=%s query=%r): %s", w is not None, query, e)
+                return []
+
+            metadatas = result.get("metadatas", [[]])[0] or []
+            distances = result.get("distances", [[]])[0] or []
+            documents = result.get("documents", [[]])[0] or []
+            embeddings = result.get("embeddings", [[]])[0] or []
+            docs: List[dict] = []
+            for idx, (meta, dist, text) in enumerate(zip(metadatas, distances, documents)):
+                row: dict = {"metadata": meta, "score": float(dist), "text": text}
+                if use_mmr and idx < len(embeddings) and embeddings[idx] is not None:
+                    row["_emb"] = list(embeddings[idx])
+                docs.append(row)
+            return docs
+
+        docs = _run_query(where, n_fetch)
+        if not docs and where is not None:
+            docs = _run_query(None, n_fetch)
+
+        if use_mmr and len(docs) > n_target:
+            with_emb = [d for d in docs if d.get("_emb")]
+            if len(with_emb) >= n_target:
+                picked = self._mmr_pick(query_embedding, with_emb, n_target, mmr_lambda)
+            else:
+                picked = docs[:n_target]
+            for p in picked:
+                p.pop("_emb", None)
+            docs = picked
+        else:
+            for d in docs:
+                d.pop("_emb", None)
+            docs = docs[:n_target]
+
         return docs
 
     @staticmethod

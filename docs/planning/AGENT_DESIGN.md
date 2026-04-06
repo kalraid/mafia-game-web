@@ -1,9 +1,9 @@
 # AI Agent 설계 명세서 (AGENT_DESIGN)
 
-> **문서 버전**: v1.2  
+> **문서 버전**: v1.3  
 > **최초 작성일**: 2026-03-18  
 > **최종 업데이트**: 2026-04-06  
-> **변경 내용**: §1.1 구현 정합(메인 LangGraph vs 실제 GameRunner)
+> **변경 내용**: §2.1·§5.3a 구현 정합(LangGraph 범위, RAG 필터·MMR), §1.1 유지
 
 ---
 
@@ -51,6 +51,14 @@
                     └─────────────────────────────────────────┘
 ```
 
+### 1.3 PlayerAgent 프롬프트 고도화 (구현)
+
+`backend/agents/player_agent.py`의 structured-output 경로에 다음이 포함된다.
+
+- **Few-shot**: 페이즈별 `_phase_few_shot_block`로 허용 필드·톤 참고 예시를 시스템 프롬프트에 삽입.
+- **Exemplar**: `_structured_exemplar_block`로 `AgentDecision`에 대응하는 **JSON 형태 exemplar**(필드명·null 규칙)를 제시.
+- **Self-consistency (선택)**: `MAFIA_SELF_CONSISTENCY_N`이 2~5이면 동일 메시지로 structured 호출을 병렬 수행하고, `merge_agent_decisions_self_consistency`로 투표는 다수결·발언은 가장 긴 텍스트·밤 능력은 (ability, target) 다수결로 병합. 샘플링 다양성은 `MAFIA_SELF_CONSISTENCY_TEMP`(기본 0.55)로 조절.
+
 ---
 
 ## 2. LangGraph 구성
@@ -78,6 +86,8 @@ Node: supervisor_replan
 Node: win_condition_checker
   → 각 Phase 종료 후 승리 조건 확인
 ```
+
+> **구현 정합 (평가·코드 기준)**: 위 블록은 **목표 아키텍처 스케치**다. **현재 구현**에서는 `backend/game/runner.py`의 `GameRunner`가 Phase 전이·타이머·승리 판정을 담당하고, LangGraph(`backend/agents/graph.py`의 `AgentGraph`)는 **페이즈별 AI 턴**(채팅·투표·밤 등) 단위로만 컴파일·호출된다. 단일 “메인 StateGraph”가 전 게임을 오케스트레이션하지는 않는다. (§1.1과 동일 맥락.)
 
 ### 2.2 Agent Node 구조 — ReAct 패턴 (bind_tools + ToolNode)
 
@@ -250,6 +260,12 @@ docs/rag_knowledge/
 2. 의미 유사도 검색 (Top-K=5)
 3. MMR(Maximal Marginal Relevance)으로 다양성 확보
 4. 검색 결과를 `rag_context` state 키에 보존 (디버깅용)
+
+### 5.3a 구현 정합 (코드)
+
+- **메타데이터 필터**: `backend/rag/retriever.py`에서 Chroma `where`에 `$or`(역할·팀 일치 + 공용 `category`: situation / rule / speech)를 적용한다. 환경변수 `MAFIA_RAG_METADATA_FILTER`(기본 `1`)로 끌 수 있다.
+- **MMR**: `backend/rag/store.py`의 `similarity_search(..., use_mmr=True)` 경로에서 후보를 넉넉히 가져온 뒤 코사인 MMR로 `k`건을 고른다. `MAFIA_RAG_USE_MMR`(기본 `0`, `1`로 활성), `MAFIA_RAG_MMR_LAMBDA`로 가중치 조정.
+- **Player 연동**: `PlayerAgent._fetch_rag_context_raw`가 `SituationDescription`에 `player_role`·`player_team`을 넘겨 필터가 동작한다.
 
 ---
 

@@ -68,6 +68,13 @@ MAFIA_BROADCAST_AGENT_THOUGHTS=1
 MAFIA_AGENT_THOUGHT_MAX_CHARS=600
 # RAG 검색 건수 로그: 1이면 INFO 한 줄, 0이면 DEBUG만
 MAFIA_RAG_LOG_HITS=1
+# RAG: Chroma 메타데이터 $or 필터 (역할·팀·공용 category). 0이면 필터 끔
+MAFIA_RAG_METADATA_FILTER=1
+# RAG: MMR 다양화 (0 꺼짐, 1 켜짐). MAFIA_RAG_MMR_LAMBDA=0.5 권장
+MAFIA_RAG_USE_MMR=0
+# Structured 출력 self-consistency: 1이면 단일 호출, 2~5면 병렬 샘플 후 병합
+MAFIA_SELF_CONSISTENCY_N=1
+MAFIA_SELF_CONSISTENCY_TEMP=0.55
 ```
 
 ### LangSmith · 멀티 POD (선택)
