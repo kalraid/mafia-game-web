@@ -1,13 +1,22 @@
 # AI Agent 설계 명세서 (AGENT_DESIGN)
 
-> **문서 버전**: v1.1  
+> **문서 버전**: v1.2  
 > **최초 작성일**: 2026-03-18  
-> **최종 업데이트**: 2026-04-05  
-> **변경 내용**: Agent Node를 bind_tools + ToolNode 패턴으로 변경 (파이프라인 방지)
+> **최종 업데이트**: 2026-04-06  
+> **변경 내용**: §1.1 구현 정합(메인 LangGraph vs 실제 GameRunner)
 
 ---
 
 ## 1. Agent 시스템 전체 구조
+
+### 1.1 구현 정합 (진입점, GAP-05)
+
+본 문서 상단 다이어그램의 **「LangGraph Main Graph가 게임 전체를 오케스트레이션」**은 **개념 모델**에 가깝다. 실제 코드에서는 **게임 Phase 루프**가 `backend/game/runner.py`의 `GameRunner`에 있으며, Phase마다 `backend/agents/graph.py`의 `AgentGraph`가 **해당 Phase용 AI 턴**(낮 채팅·투표·밤 등)만 실행한다.
+
+- **통합 `apply_action` / 단일 메인 StateGraph**: `GameEngine`에 존재하지 않는다. 인간 액션은 FastAPI `POST` 핸들러가 `GameEngine.submit_*` 및 `chat_history`를 직접 갱신한다.
+- **에이전트 서브그래프**: 각 AI 호출은 `run_agent → END` 형태의 작은 LangGraph로 컴파일되며, Checkpointer는 `MAFIA_USE_REDIS_CHECKPOINTER`로 선택 적용된다.
+
+### 1.2 개념 다이어그램 (참고: 실제 오케스트레이션은 GameRunner)
 
 ```
 ┌───────────────────────────────────────────────────────────────┐

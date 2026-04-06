@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass
 from typing import List
 
@@ -24,5 +25,9 @@ class StrategyRetriever:
 
     def retrieve_strategies(self, situation: SituationDescription, k: int = 3) -> List[dict]:
         results = self.store.similarity_search(situation.text, k=k)
-        logger.debug("rag retrieved k=%d", len(results))
+        hits = len(results)
+        if os.getenv("MAFIA_RAG_LOG_HITS", "1").strip().lower() in {"1", "true", "yes"}:
+            logger.info("rag retrieve hits=%d k_requested=%d", hits, k)
+        else:
+            logger.debug("rag retrieve hits=%d", hits)
         return results

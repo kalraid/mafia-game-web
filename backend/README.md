@@ -66,6 +66,8 @@ PORT=8000
 MAFIA_BROADCAST_AGENT_THOUGHTS=1
 # reasoning_preview 최대 길이(문자)
 MAFIA_AGENT_THOUGHT_MAX_CHARS=600
+# RAG 검색 건수 로그: 1이면 INFO 한 줄, 0이면 DEBUG만
+MAFIA_RAG_LOG_HITS=1
 ```
 
 ### LangSmith · 멀티 POD (선택)

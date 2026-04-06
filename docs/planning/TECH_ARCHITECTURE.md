@@ -1,9 +1,9 @@
 # 기술 아키텍처 명세서 (TECH_ARCHITECTURE)
 
-> **문서 버전**: v1.2  
+> **문서 버전**: v1.3  
 > **최초 작성일**: 2026-03-18  
-> **최종 업데이트**: 2026-04-05  
-> **변경 내용**: 투표/능력 통신 방식 WebSocket → REST 변경 기록, 구현 현황 반영
+> **최종 업데이트**: 2026-04-06  
+> **변경 내용**: §3.5 플레이어 액션 진입점(구현 정합), WS 이벤트 보강(agent_thought 등)
 
 ---
 
@@ -90,6 +90,19 @@ backend/
 | 클라이언트 → 서버 (투표) | **HTTP REST** | POST /game/{id}/vote |
 | 클라이언트 → 서버 (능력) | **HTTP REST** | POST /game/{id}/ability |
 
+### 3.1a 플레이어 액션 진입점 (구현 정합, GAP-05)
+
+일부 기획·다이어그램에는 `GameEngine.apply_action(...)` 같은 **단일 통합 진입점**이 가정될 수 있으나, **현재 저장소의 `GameEngine`에는 해당 메서드가 없다.** 실제 갱신 경로는 다음과 같다.
+
+| 액션 | 코드 진입점 | 엔진 호출 |
+|------|-------------|-----------|
+| 채팅(인간) | `main.py` `POST /game/{id}/chat` | `ChatMessage`를 `game.state.chat_history`에 추가 후 `chat_broadcast` |
+| 투표 | `main.py` `POST /game/{id}/vote` | `GameEngine.submit_vote(voter_id, target_id)` → `game_state_update` 브로드캐스트 |
+| 능력 | `main.py` `POST /game/{id}/ability` | `GameEngine.submit_ability(...)` (밤 처리 루프에서 소비) |
+| AI 턴 | `game/runner.py` `GameRunner.run` (백그라운드) | Phase별 `AgentGraph.run_day_chat_round` / `run_vote_round` / `run_night_*` → `MCPGameTools`로 상태 반영 |
+
+게임 생성은 `GameRegistry.create_game` → `GameEngine` 보관 후, 러너 태스크가 별도로 `run()`을 돈다.
+
 ### 3.2 REST API 스펙
 
 ```
@@ -116,10 +129,11 @@ GET /health
 { "event": "chat_broadcast",    "payload": { "sender", "content", "channel", "timestamp", "is_ai" } }
 { "event": "phase_change",      "payload": { "phase", "round" } }
 { "event": "game_state_update", "payload": { "players", "phase", "round", "timer_seconds" } }
-{ "event": "player_death",      "payload": { "player", "role"(한글), "cause" } }
-{ "event": "vote_result",       "payload": { "target", "votes", "executed" } }
+{ "event": "player_death",      "payload": { "player_id", "player"(표시명), "role"(한글), "cause" } }
+{ "event": "vote_result",       "payload": { "target", "votes", "votes_received"?, "executed" } }
 { "event": "ability_result",    "payload": { "type", "success", "detail" } }
 { "event": "game_over",         "payload": { "winner", "reason", "players" } }
+{ "event": "agent_thought",     "payload": { "agent_id", "player_name", "phase", "round", "reasoning_preview", "confidence"? } }
 ```
 
 ### 3.4 채팅 채널 분리

@@ -36,9 +36,9 @@
 
 | ID | 상태 | 작업 | 담당 | 산출물·완료 기준 |
 |----|------|------|------|------------------|
-| **GAP-05** | ⬜ | `TECH_ARCHITECTURE.md` 또는 `AGENT_DESIGN.md`에 실제 진입점 반영: **`apply_action` 없음** → `POST` 핸들러·`GameEngine.submit_*` 직접 호출로 플로우 기술. | Claude 또는 Cursor | 다이어그램/문장만 수정, PROPOSAL 본문은 사용자 정책에 따름. |
-| **GAP-06** | ⬜ | 로그 가시성: RAG 히트 건수를 **INFO** 한 줄로 남길지(운영 노이즈 vs 데모) 정책 결정 후 `retriever`/`player_agent` 로깅 조정. | Cursor | 팀 합의 후 단일 커밋. |
-| **GAP-07** | ⬜ | §5 확장 과제 중 착수 여부 결정: **병렬 에이전트**(`asyncio.gather` on `run_*_round`)는 `GameState` 동시성·채팅 순서 이슈 검토 후 별도 설계 티켓. | 기획/Claude | `TASK_PLAN` Phase 후속 또는 `PROPOSAL` §5만 유지. |
+| **GAP-05** | ✅ (2026-04-06) | `TECH_ARCHITECTURE.md` 또는 `AGENT_DESIGN.md`에 실제 진입점 반영: **`apply_action` 없음** → `POST` 핸들러·`GameEngine.submit_*` 직접 호출로 플로우 기술. | Claude 또는 Cursor | `TECH_ARCHITECTURE` v1.3, `AGENT_DESIGN` v1.2. |
+| **GAP-06** | ✅ (2026-04-06) | 로그 가시성: RAG 히트 건수 **INFO** 한 줄 + `MAFIA_RAG_LOG_HITS=0` 시 DEBUG만. | Cursor | `retriever.py`, `backend/README.md`. |
+| **GAP-07** | ✅ (2026-04-06) | §5 병렬 에이전트: **착수 보류** 및 이유 명시, `TASK_PLAN` **I-19** 백로그 행으로 티켓화. | 기획/Claude | `PROPOSAL` §5 유지 + I-19 참조. |
 
 ---
 
@@ -87,9 +87,9 @@
 [x] GAP-02  프롬프트·스팸 방지 가이드
 [x] GAP-03  agent_thought WS + 프론트 표시
 [x] GAP-04  confidence → agent_thought 페이로드(스냅샷 players 제외)
-[ ] GAP-05  TECH/AGENT 설계 문서 플로우 수정
-[ ] GAP-06  RAG 로그 레벨 정책
-[ ] GAP-07  §5 병렬 실행 등 — 별도 티켓화 여부 결정
+[x] GAP-05  TECH/AGENT 설계 문서 플로우 수정
+[x] GAP-06  RAG 로그 레벨 정책
+[x] GAP-07  §5 병렬 실행 등 — 별도 티켓화 여부 결정 (I-19 보류)
 ```
 
 
