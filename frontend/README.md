@@ -120,6 +120,7 @@ frontend/
 | `vote_result` | 투표 수 업데이트 (`votes_received`: 플레이어 id 기준 득표 집계) |
 | `ability_result` | 토스트 메시지 |
 | `game_over` | 결과 화면 전환 |
+| `agent_thought` | AI 추론 미리보기(관전·디버그, `game_state.agent_thoughts`) |
 
 ## REST 송신
 

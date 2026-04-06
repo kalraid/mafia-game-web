@@ -63,7 +63,8 @@ chat_broadcast    : { sender, content, channel, timestamp, is_ai }
 phase_change      : { phase, round }
 game_state_update : { players, phase, round, timer_seconds }
 player_death      : { player, role(한글), cause }
-vote_result       : { target, votes, executed }
+vote_result       : { target, votes, votes_received?, executed }
+agent_thought     : { agent_id, player_name, phase, round, reasoning_preview, confidence? }
 ability_result    : { type, success, detail }
 game_over         : { winner, reason, players }
 ```

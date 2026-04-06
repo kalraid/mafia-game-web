@@ -149,7 +149,7 @@ def draw_status_panel():
                         )
                         response.raise_for_status()
                         
-                        st.toast(f"✅ {target_name}에게 투표했습니다.", icon="🗳️")
+                        st.toast(f"✅ {target_name}에게 투표했습니다.", icon="✅")
                         st.session_state.selection = None
                         st.rerun()
                     except requests.exceptions.RequestException as e:
@@ -302,6 +302,22 @@ def draw_status_panel():
                 st.markdown(f"**{i + 1}.** {_format_rag_hit(ctx)}")
         else:
             st.caption("RAG 컨텍스트 없음 (AI 턴 이후 `game_state_update`에 포함됩니다)")
+
+    with st.expander("🧠 AI 추론 미리보기 (관전·디버그)"):
+        thoughts = game_state.get("agent_thoughts") or []
+        if not thoughts:
+            st.caption("아직 수신 없음 (`agent_thought` WS — `MAFIA_BROADCAST_AGENT_THOUGHTS=1` 기본)")
+        else:
+            for i, t in enumerate(reversed(thoughts[-20:])):
+                if not isinstance(t, dict):
+                    continue
+                who = t.get("player_name") or t.get("agent_id", "?")
+                ph = t.get("phase", "")
+                rnd = t.get("round", "")
+                cf = t.get("confidence")
+                cf_s = f" · conf={float(cf):.2f}" if isinstance(cf, (int, float)) else ""
+                st.markdown(f"**{who}** · {ph} R{rnd}{cf_s}")
+                st.caption(str(t.get("reasoning_preview", ""))[:1200])
 
     with st.expander("🎛️ 슈퍼바이저 / MCP (디버그)"):
         directives = game_state.get("debug_directives", [])

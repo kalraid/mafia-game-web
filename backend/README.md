@@ -62,6 +62,10 @@ CHROMA_PERSIST_DIR=./backend/rag/chroma_db
 RAG_KNOWLEDGE_DIR=./backend/rag/knowledge
 EMBEDDING_MODEL=sentence-transformers/paraphrase-multilingual-mpnet-base-v2
 PORT=8000
+# GAP-03: AI 추론 미리보기 WS (`agent_thought`). 0 으로 끔.
+MAFIA_BROADCAST_AGENT_THOUGHTS=1
+# reasoning_preview 최대 길이(문자)
+MAFIA_AGENT_THOUGHT_MAX_CHARS=600
 ```
 
 ### LangSmith · 멀티 POD (선택)

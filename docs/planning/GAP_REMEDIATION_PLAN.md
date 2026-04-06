@@ -29,8 +29,8 @@
 
 | ID | 상태 | 작업 | 담당 | 산출물·완료 기준 |
 |----|------|------|------|------------------|
-| **GAP-03** | ⬜ | **선택적** 브로드캐스트: AI 턴 종료 시 `internal_notes`(또는 요약 필드)를 디버그/관전 전용 이벤트로 전송. 예: `agent_thought` `{ agent_id, phase, round, reasoning_redacted? }`. PII·토큰 폭주 방지(길이 제한). | Cursor + Gemini | 백엔드: 이벤트 타입·페이로드 정의, `events.py` 허용 목록 추가. 프론트: expander 또는 별도 패널에서만 표시(기본 숨김 권장). |
-| **GAP-04** | ⬜ | `confidence`를 구조화 출력에서 UI까지 노출할지 결정. 노출 시 snapshot `players` 또는 별도 디버그 페이로드에 **해당 턴 AI만** 포함하는 방식 권장. | Gemini 우선 / Cursor API 협의 | 기획서 「확신도 수치화」와 시연 스크립트 정합. |
+| **GAP-03** | ✅ (2026-04-06) | AI 턴마다 `internal_notes` 일부를 `agent_thought` WS로 브로드캐스트. `MAFIA_BROADCAST_AGENT_THOUGHTS`·`MAFIA_AGENT_THOUGHT_MAX_CHARS`. | Cursor + Gemini | `events.py`, `runner.py`, `app.py`, `status_panel` expander. |
+| **GAP-04** | ✅ (2026-04-06) | `AgentOutput.confidence` + `agent_thought` 페이로드에 선택 포함. **snapshot `players`에는 미포함**(디버그 이벤트만). | Cursor + Gemini | 플레이어 카드 게이지는 미구현(선택). |
 
 ### P2 — 다이어그램·문서·관측성 (기획서 외 문서)
 
@@ -47,7 +47,7 @@
 1. **GAP-01 → GAP-02** (기획서 MCP 서술과 코드 일치, 시연 시 설명 용이)  
 2. **GAP-03** (데모에서 “AI가 왜 그랬는지”를 선택적으로 보여줄 수 있게)  
 3. **GAP-05** (신규 합류자·채점자가 아키텍처 문서만 보고도 흐름 이해)  
-4. **GAP-04, GAP-06, GAP-07** (리소스·우선순위에 따라 순차 또는 보류)
+4. **GAP-06, GAP-07** (리소스·우선순위에 따라 순차 또는 보류) — GAP-04는 `agent_thought`로 충족, 카드 UI는 선택
 
 ---
 
@@ -85,8 +85,8 @@
 ```
 [x] GAP-01  report_to_supervisor → bind_tools + 실행 루프
 [x] GAP-02  프롬프트·스팸 방지 가이드
-[ ] GAP-03  agent_thought(가칭) WS + 프론트 표시
-[ ] GAP-04  confidence UI 노출 여부 및 API
+[x] GAP-03  agent_thought WS + 프론트 표시
+[x] GAP-04  confidence → agent_thought 페이로드(스냅샷 players 제외)
 [ ] GAP-05  TECH/AGENT 설계 문서 플로우 수정
 [ ] GAP-06  RAG 로그 레벨 정책
 [ ] GAP-07  §5 병렬 실행 등 — 별도 티켓화 여부 결정

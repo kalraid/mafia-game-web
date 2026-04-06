@@ -73,6 +73,7 @@ class AgentGraph:
                     "vote": output.vote,
                     "internal_notes": output.internal_notes,
                     "rag_context": output.rag_context,
+                    "confidence": output.confidence,
                 }
             }
 
@@ -299,12 +300,16 @@ class AgentGraph:
         if isinstance(rc, list):
             rag_list = [x for x in rc if isinstance(x, dict)]
 
+        conf = out.get("confidence")
+        conf_f: float | None = float(conf) if isinstance(conf, (int, float)) else None
+
         return AgentOutput(
             speech=out.get("speech") if isinstance(out.get("speech"), str) else None,
             action=out.get("action") if isinstance(out.get("action"), dict) else None,
             vote=out.get("vote") if isinstance(out.get("vote"), str) else None,
             internal_notes=out.get("internal_notes") if isinstance(out.get("internal_notes"), str) else None,
             rag_context=rag_list,
+            confidence=conf_f,
         )
 
     async def run_day_chat_round(self, state: GameState) -> Dict[str, AgentOutput]:

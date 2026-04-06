@@ -63,6 +63,7 @@ class AgentOutput:
     vote: Optional[str]
     internal_notes: Optional[str]
     rag_context: List[dict] = field(default_factory=list)
+    confidence: Optional[float] = None
 
 
 class PlayerAgent:
@@ -141,6 +142,7 @@ class PlayerAgent:
                 vote=None,
                 internal_notes=decision.reasoning,
                 rag_context=rag_safe,
+                confidence=decision.confidence,
             )
 
         # Phase별로 허용된 필드만 남겨서 "엉뚱한 행동"이 섞이지 않게 가드.
@@ -177,6 +179,7 @@ class PlayerAgent:
             vote=vote_target,
             internal_notes=decision.reasoning,
             rag_context=rag_safe,
+            confidence=decision.confidence,
         )
 
         # C-2: AgentGraph에서 수동 MCP 호출을 제거했으므로,

@@ -8,7 +8,7 @@ from backend.agents.graph import AgentGraph
 from backend.agents.player_agent import AgentOutput
 from backend.agents.pool import AgentPool
 from backend.game.engine import GameEngine
-from backend.game.snapshot import build_game_state_payload, role_to_korean
+from backend.game.snapshot import build_game_state_payload, role_to_korean, ui_phase
 from backend.models.chat import ChatMessage
 from backend.models.game import Phase
 from backend.websocket.events import ServerToClientEvent
@@ -62,6 +62,7 @@ class GameRunner:
 
             # AI 행동 실행
             outputs = await self._run_agents_for_current_phase()
+            await self._broadcast_agent_thoughts(outputs)
             self._merge_rag_from_outputs(outputs)
 
             # agent 실행 후 채팅/투표 반영 브로드캐스트
@@ -91,6 +92,44 @@ class GameRunner:
                     # 루프 종료 등으로 create_task가 실패해도 게임 종료 응답은 이미 전송됨.
                     pass
                 return
+
+    async def _broadcast_agent_thoughts(self, outputs: Dict[str, AgentOutput]) -> None:
+        """
+        GAP-03: AI 턴마다 내부 추론(reasoning) 일부를 관전·디버그용으로 브로드캐스트.
+        MAFIA_BROADCAST_AGENT_THOUGHTS=0 으로 끌 수 있다. 길이는 MAFIA_AGENT_THOUGHT_MAX_CHARS.
+        """
+        flag = os.getenv("MAFIA_BROADCAST_AGENT_THOUGHTS", "1").strip().lower()
+        if flag in {"0", "false", "no"}:
+            return
+        try:
+            max_chars = max(80, min(4000, int(os.getenv("MAFIA_AGENT_THOUGHT_MAX_CHARS", "600"))))
+        except ValueError:
+            max_chars = 600
+
+        for agent_id, out in outputs.items():
+            notes = (out.internal_notes or "").strip()
+            if not notes:
+                continue
+            preview = notes if len(notes) <= max_chars else notes[: max_chars - 1] + "…"
+            pname = next(
+                (p.name for p in self.engine.state.players if p.id == agent_id),
+                agent_id,
+            )
+            conf = out.confidence
+            payload: Dict[str, Any] = {
+                "agent_id": agent_id,
+                "player_name": pname,
+                "phase": ui_phase(self.engine.state.phase),
+                "round": self.engine.state.round,
+                "reasoning_preview": preview,
+            }
+            if isinstance(conf, (int, float)):
+                payload["confidence"] = float(conf)
+
+            await self.ws_manager.broadcast(
+                self.game_id,
+                ServerToClientEvent(event="agent_thought", payload=payload),
+            )
 
     def _merge_rag_from_outputs(self, outputs: Dict[str, AgentOutput]) -> None:
         """실행 순서대로 마지막 비어 있지 않은 rag_context를 유지한다."""

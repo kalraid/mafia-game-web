@@ -33,5 +33,6 @@ class ServerToClientEvent(BaseModel):
         "vote_result",
         "ability_result",
         "game_over",
+        "agent_thought",
     ]
     payload: dict[str, Any]
