@@ -33,7 +33,8 @@ def draw_player_card(player_name, is_alive=True, is_me=False, votes=0, disabled=
     label_name = f"⭐ {player_name} (나)" if is_me else player_name
     
     # If dead and role is revealed, show it (G-6)
-    role_info = f" ({role})" if not is_alive and role else ""
+    # Also show my own role if is_me is True
+    role_info = f" ({role})" if (not is_alive or is_me) and role else ""
     
     silent_icon = "🤫" if is_silent and is_alive else ""
     
