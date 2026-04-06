@@ -56,12 +56,12 @@ def handle_message(message):
 
         if event == "game_state_update" or event == "phase_change":
             st.session_state.game_state.update(payload)
-            st.rerun()
+            return True # State changed
         elif event == "chat_broadcast":
             if "chat_history" not in st.session_state.game_state:
                 st.session_state.game_state["chat_history"] = []
             st.session_state.game_state["chat_history"].append(payload)
-            st.rerun()
+            return True # State changed
         elif event == "player_death":
             dead_player_name = payload.get("player")
             dead_player_role = payload.get("role")
@@ -72,7 +72,7 @@ def handle_message(message):
                         p["is_alive"] = False
                         p["role"] = dead_player_role # Reveal role on death
                         break
-            st.rerun()
+            return True # State changed
         elif event == "vote_result":
             # Payload is expected to be a dict mapping player names to vote counts
             # e.g., {"player1": 2, "player2": 1, "player3": 0}
@@ -80,7 +80,7 @@ def handle_message(message):
             if "players" in st.session_state.game_state:
                 for p in st.session_state.game_state["players"]:
                     p["votes"] = vote_counts.get(p["name"], 0)
-            st.rerun()
+            return True # State changed
         elif event == "ability_result":
             payload = data.get("payload", {})
             ability_msg = payload.get("message", "능력 사용 결과가 도착했습니다.")
@@ -90,20 +90,29 @@ def handle_message(message):
                 st.toast(f"✅ {ability_msg}", icon="✅")
             else:
                 st.toast(f"❌ {ability_msg}", icon="❌")
-            # No rerun needed for toast
+            return False # No rerun needed for toast
         elif event == "game_over":
             st.session_state.game_state.update(payload)
             st.session_state.page = "result"
-            st.rerun()
+            return True # Page changed
+        
+        return False
 
     except json.JSONDecodeError:
         print(f"Could not decode message: {message}")
+        return False
     except Exception as e:
         print(f"Error handling message: {e}")
+        return False
 
 if messages:
+    any_changed = False
     for message in messages:
-        handle_message(message)
+        if handle_message(message):
+            any_changed = True
+    
+    if any_changed:
+        st.rerun()
 
 # Apply theme based on game phase
 phase = st.session_state.game_state.get("phase", "day")

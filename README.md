@@ -11,7 +11,7 @@
 |------|------|
 | **Frontend** | Streamlit (포트 8501) |
 | **Backend** | FastAPI + LangGraph + LangChain (포트 8000) |
-| **AI** | Claude API (claude-sonnet-4) — 없으면 Fallback 모드 |
+| **AI** | Claude API (anthropic) 또는 Azure OpenAI — `MAFIA_LLM_PROVIDER`로 전환, 없으면 Fallback 모드 |
 | **DB** | ChromaDB (RAG 벡터 DB) |
 | **세션** | Redis + LangGraph Checkpointer |
 | **통신** | WebSocket (이벤트 Push) + HTTP REST (액션) |
@@ -134,13 +134,31 @@ mafia-game-web/
 
 | 변수 | 기본값 | 설명 |
 |------|--------|------|
+| `MAFIA_LLM_PROVIDER` | `anthropic` | LLM Provider 선택: `anthropic` \| `azure` |
 | `ANTHROPIC_API_KEY` | — | Claude API 키 (없으면 Fallback) |
-| `ANTHROPIC_MODEL` | `claude-sonnet-4` | 사용할 모델 |
-| `MAFIA_USE_LLM` | `1` | `0` 설정 시 LLM 비활성화 |
-| `REDIS_URL` | `redis://localhost:6379` | Redis 연결 주소 |
-| `MAFIA_USE_REDIS_CHECKPOINTER` | `0` | `1` 설정 시 LangGraph Redis 체크포인터 활성화 |
+| `ANTHROPIC_MODEL` | `claude-sonnet-4` | 사용할 Claude 모델 |
+| `MAFIA_USE_LLM` | `1` | `0` 설정 시 LLM 전체 비활성화 (Fallback 모드) |
+| `REDIS_URL` | `redis://localhost:6379` | Redis 연결 주소 (docker-compose에서는 `redis://redis:6379` 자동 적용) |
+| `MAFIA_USE_REDIS_CHECKPOINTER` | `0` (로컬) | `1` 설정 시 LangGraph Redis 체크포인터 활성화 — docker-compose에서 자동으로 `1` |
 | `PORT` | `8000` | 백엔드 포트 |
 | `CHROMA_PERSIST_DIR` | `./backend/rag/chroma_db` | ChromaDB 저장 경로 |
+| `LANGCHAIN_TRACING_V2` | `false` | `true` 설정 시 LangSmith 트레이싱 활성화 (선택) |
+| `LANGCHAIN_API_KEY` | — | LangSmith API 키 (`LANGCHAIN_TRACING_V2=true` 시) |
+| `MAFIA_POD_ID` | — | 멀티POD 환경 식별자 — 미설정 시 hostname 자동 사용 (선택) |
+
+---
+
+## LLM Provider 선택
+
+`MAFIA_LLM_PROVIDER` 환경변수 하나로 LLM 제공자를 전환합니다.
+
+| 모드 | 환경변수 설정 | 설명 |
+|------|------------|------|
+| **Anthropic Claude** (기본) | `MAFIA_LLM_PROVIDER=anthropic` | `ANTHROPIC_API_KEY` 필요 |
+| **Azure OpenAI** | `MAFIA_LLM_PROVIDER=azure` | `AOAI_ENDPOINT`, `AOAI_API_KEY`, `AOAI_DEPLOY_GPT4O` 필요 |
+| **Fallback** (LLM 없음) | `MAFIA_USE_LLM=0` | AI가 랜덤 행동으로 동작, API 키 불필요 |
+
+Azure OpenAI 상세 환경변수는 `.env.example` 참조.
 
 ---
 
@@ -161,4 +179,4 @@ mafia-game-web/
 - [AI Agent 설계](docs/planning/AGENT_DESIGN.md)
 - [작업 계획](docs/planning/TASK_PLAN.md)
 
-2026-04-05
+2026-04-06

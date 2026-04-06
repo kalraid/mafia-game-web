@@ -29,7 +29,9 @@ class MCPGameTools:
 
     def get_my_role(self, agent_id: str) -> Role:
         state: GameState = self.engine.state
-        player = next(p for p in state.players if p.id == agent_id)
+        player = next((p for p in state.players if p.id == agent_id), None)
+        if player is None:
+            raise ValueError(f"get_my_role: agent_id={agent_id!r} 플레이어를 찾을 수 없음")
         return player.role
 
     def get_current_phase(self) -> Phase:

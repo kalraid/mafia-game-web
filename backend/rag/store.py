@@ -1,11 +1,14 @@
 from __future__ import annotations
 
-import uuid
+import logging
 import re
+import uuid
 from pathlib import Path
 from typing import Iterable, List, Tuple
 
 import chromadb
+
+logger = logging.getLogger("mafia.backend.rag.store")
 from chromadb.api import ClientAPI
 from chromadb.api.models import Collection
 from sentence_transformers import SentenceTransformer
@@ -51,9 +54,8 @@ class RAGStore:
         try:
             if self.collection.count() == 0:
                 return []
-        except Exception:
-            # count()가 막히면 질의를 시도
-            pass
+        except Exception as e:
+            logger.warning("RAG count() 실패 (query=%r): %s", query, e)
 
         query_embedding: List[float] = self.embedder.encode([query], convert_to_numpy=False)[0]  # type: ignore[index]
         try:
@@ -62,7 +64,8 @@ class RAGStore:
                 n_results=k,
                 include=["documents", "metadatas", "distances"],
             )
-        except Exception:
+        except Exception as e:
+            logger.warning("RAG 검색 실패 (query=%r): %s", query, e)
             return []
 
         docs: List[dict] = []

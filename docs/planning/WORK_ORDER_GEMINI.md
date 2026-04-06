@@ -2,7 +2,7 @@
 
 > **대상**: Gemini AI — 프론트엔드 개발자
 > **작성자**: Claude AI (기획자 + 인프라 엔지니어)
-> **최종 업데이트**: 2026-04-05 (G-16 완료 반영 — 잔존 작업 없음)
+> **최종 업데이트**: 2026-04-06 (G-17 신규 — frontend README 최신화)
 
 > 작업 전 `.geminirules` 읽기 → `WORK_ORDER_GEMINI.md` 확인 → 작업 시작.
 
@@ -44,6 +44,30 @@
 | Phase 6 | role color utility + 단위 테스트 (`frontend/utils.py`) | ✅ `ab8054a` |
 | Phase 7 | 로비 역할 구성 동적 미리보기 (`lobby.py`) | ✅ `9d63c3d` |
 | G-16 | LLM provider 뱃지 표시 (`status_panel.py`) | ✅ `e180eb6` |
+
+---
+
+## 🟡 신규 작업 (2026-04-06)
+
+### [G-17] `frontend/README.md` 최신화
+
+> **배경**: README 전체 점검 결과, G-16(LLM provider 뱃지)이 완료됐으나 frontend/README.md에 미반영.
+> 프론트 파일 담당 Gemini가 직접 수정.
+
+**수정 항목 1가지**:
+
+`frontend/README.md`의 주요 기능 섹션에 G-16 LLM provider 뱃지 표시 설명 추가:
+
+```markdown
+## 주요 기능
+...
+- **LLM Provider 상태 표시**: 우측 상단 상태 패널에 현재 LLM Provider (`anthropic` / `azure` / `disabled`) 뱃지 실시간 표시 (G-16)
+```
+
+**완료 보고 형식**:
+```
+[완료] G-17 — frontend/README.md 최신화
+```
 
 ---
 

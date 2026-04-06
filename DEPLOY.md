@@ -28,7 +28,7 @@
 
 ```bash
 # 1. 저장소 클론 (이미 있으면 생략)
-git clone https://github.com/kalraid/mafia-game-web.git
+git clone https://github.com/***/***.git
 cd mafia-game-web
 
 # 2. 환경변수 파일 생성

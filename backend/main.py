@@ -1,22 +1,59 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import secrets
+from contextlib import asynccontextmanager
 from pathlib import Path
+
+# ── 전역 로깅 설정 (FastAPI 앱 생성 전) ───────────────────────────────
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
+)
+logger = logging.getLogger("mafia.main")
+
+# ── LangSmith 트레이싱 (LANGCHAIN_TRACING_V2=true 시 verbose/debug) ──
+if os.getenv("LANGCHAIN_TRACING_V2", "false").lower() == "true":
+    try:
+        from langchain.globals import set_debug, set_verbose
+
+        set_debug(True)
+        set_verbose(True)
+        logger.info(
+            "LangSmith tracing enabled (project=%s)",
+            os.getenv("LANGCHAIN_PROJECT", "mafia-game"),
+        )
+    except ImportError as e:
+        logger.warning("LangChain globals 임포트 실패, 트레이싱 플래그만 환경변수로 동작: %s", e)
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
 from backend.config import get_llm_provider_health
 from backend.game.registry import GameRegistry
+from backend.pod import POD_ID
 from backend.websocket.manager import ConnectionManager
 from backend.game.snapshot import build_game_state_payload
 from backend.models.chat import ChatMessage
 from backend.websocket.events import ServerToClientEvent
 
 
-app = FastAPI(title="AI Mafia Backend")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info(
+        "=== MAFIA BACKEND POD STARTED === pod_id=%s redis=%s checkpointer=%s llm=%s",
+        POD_ID,
+        os.getenv("REDIS_URL", "N/A"),
+        os.getenv("MAFIA_USE_REDIS_CHECKPOINTER", "0"),
+        os.getenv("MAFIA_LLM_PROVIDER", "anthropic"),
+    )
+    yield
+    logger.info("=== MAFIA BACKEND POD STOPPING === pod_id=%s", POD_ID)
+
+
+app = FastAPI(title="AI Mafia Backend", lifespan=lifespan)
 registry = GameRegistry()
 ws_manager = ConnectionManager(registry=registry)
 

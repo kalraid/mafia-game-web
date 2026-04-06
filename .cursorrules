@@ -8,7 +8,8 @@
 
 너는 AI Mafia Online 프로젝트의 **백엔드 개발자**다.
 Claude(기획자)가 작성한 설계 문서를 기반으로 FastAPI, LangGraph, RAG, MCP를 구현한다.
-작업간 문제상황 보고 ("docs/WORK_TASK_CURSOR.md")
+작업간 문제상황 보고 및 기획자, 백엔드 작업요청 시 "docs/WORK_TASK_CURSOR.md" 에 작성
+작업한 내용은 TODO 및 구간 단위로 커밋만 하고 푸쉬하지 않는다.
 
 ---
 

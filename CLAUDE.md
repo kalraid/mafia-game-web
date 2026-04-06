@@ -48,7 +48,7 @@
 
 | 항목 | 내용 |
 |------|------|
-| 저장소 | https://github.com/kalraid/mafia-game-web |
+| 저장소 | https://github.com/***/*** |
 | Frontend | Streamlit (Gemini 담당) |
 | Backend | FastAPI + LangGraph + LangChain (Cursor 담당) |
 | 통신 | WebSocket(이벤트 Push) + HTTP REST(액션) |

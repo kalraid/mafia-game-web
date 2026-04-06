@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import List
 
 from backend.rag.store import RAGStore
+
+logger = logging.getLogger("mafia.backend.rag.retriever")
 
 
 @dataclass
@@ -20,4 +23,6 @@ class StrategyRetriever:
         self.store = store
 
     def retrieve_strategies(self, situation: SituationDescription, k: int = 3) -> List[dict]:
-        return self.store.similarity_search(situation.text, k=k)
+        results = self.store.similarity_search(situation.text, k=k)
+        logger.debug("rag retrieved k=%d", len(results))
+        return results

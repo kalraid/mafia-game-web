@@ -59,6 +59,9 @@ services:
       # Redis 내부 컨테이너 통신은 service명 사용
       - REDIS_URL=redis://redis:6379
       - MAFIA_USE_REDIS_CHECKPOINTER=1
+      # POD 식별자 — 멀티 POD 로깅용
+      # 미설정 시 코드에서 socket.gethostname()으로 자동 결정
+      - MAFIA_POD_ID=${MAFIA_POD_ID:-}
       # LLM Provider — .env 또는 docker run -e 로 주입
       # MAFIA_LLM_PROVIDER=anthropic (기본) | azure
       - MAFIA_LLM_PROVIDER=${MAFIA_LLM_PROVIDER:-anthropic}
@@ -74,6 +77,11 @@ services:
       - AOAI_DEPLOY_EMBED_3_LARGE=${AOAI_DEPLOY_EMBED_3_LARGE:-}
       - AOAI_DEPLOY_EMBED_3_SMALL=${AOAI_DEPLOY_EMBED_3_SMALL:-}
       - AOAI_DEPLOY_EMBED_ADA=${AOAI_DEPLOY_EMBED_ADA:-}
+      # LangSmith 트레이싱 (과제 트레이싱 요건)
+      # LANGCHAIN_TRACING_V2=true 로 설정하면 LangSmith에 전 흐름 추적됨
+      - LANGCHAIN_TRACING_V2=${LANGCHAIN_TRACING_V2:-false}
+      - LANGCHAIN_API_KEY=${LANGCHAIN_API_KEY:-}
+      - LANGCHAIN_PROJECT=${LANGCHAIN_PROJECT:-mafia-game}
     restart: unless-stopped
 
   # ----------------------------------------------------------

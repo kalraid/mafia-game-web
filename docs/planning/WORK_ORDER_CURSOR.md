@@ -2,7 +2,7 @@
 
 > **대상**: Cursor AI — 백엔드 개발자
 > **작성자**: Claude AI (기획자 + 인프라)
-> **최종 업데이트**: 2026-04-05 (C-12 신규 — LLM Provider config 레이어 추가)
+> **최종 업데이트**: 2026-04-06 (C-19 완료, C-20 신규 — trust_score·player ID 통일)
 
 > 작업 전 반드시 이 문서를 먼저 읽을 것.  
 > **docker-compose.yml은 수정하지 않는다** — Claude 담당.
@@ -46,6 +46,12 @@
 | C-12-2 | `player_agent.py` — `get_chat_llm()` 교체 | `f25160f` |
 | C-12-3 | `analysis_agent.py` — `get_chat_llm()` 교체 | `f25160f` |
 | C-12-4 | `GET /health` — `llm_provider` 필드 추가 | `f25160f` |
+| C-13 | 전역 로깅 + LangSmith(`LANGCHAIN_TRACING_V2`) verbose/debug | 2026-04-06 |
+| C-14 | graph/tools/store/player_agent 가드·예외·RAG 경고 로깅 | 2026-04-06 |
+| C-15 | 멀티 POD 소유권 로깅 (`pod.py`, lifespan, registry, graph, runner) | 2026-04-06 |
+| C-16 | G-12 RAG 디버그 패널 — `AgentOutput.rag_context`, `snapshot.py`, `runner.py` 연동 | 2026-04-06 |
+| C-17 | Phase 5-8 슈퍼바이저 MCP — `_choose_suspect()` report 활용, `_issue_directives_for_phase()` reports 전달 | 2026-04-06 |
+| C-18 | Phase 6-7 AI vs AI 시뮬 테스트 + `test_mcp_memory_tools.py` 삭제 | 2026-04-06 |
 
 ---
 
@@ -477,6 +483,260 @@ rag_store.similarity_search("마피아 2인 열세 역전 전략")
 ```
 
 **참조**: `RAG_AND_STORAGE_DESIGN.md` §8, `AGENT_DESIGN.md` §2.2, `TASK_PLAN.md` Phase 8
+
+---
+
+---
+
+## ~~🔴 신규 긴급 작업~~ ✅ C-13 / C-14 완료 (2026-04-06)
+
+### ~~[C-13]~~ ✅ 전역 로깅 + LangSmith 트레이싱
+
+- `main.py`: 앱 생성 전 `logging.basicConfig`, `LANGCHAIN_TRACING_V2=true` 시 `set_debug`/`set_verbose` + `mafia.main` 로그 (임포트 실패 시 WARNING).
+- `graph.py` / `player_agent.py` / `runner.py` / `retriever.py`: 지시서 표에 따른 INFO/DEBUG 로그.
+
+### ~~[C-14]~~ ✅ 가드코드 + 예외 표준화
+
+- `graph.py` `_run_agent_node`: 빈/미등록 `agent_id` → `ValueError`.
+- `mcp/tools.py` `get_my_role`: `next(..., None)` + `ValueError`.
+- `rag/store.py` `similarity_search`: `count`/`query` 실패 시 `logger.warning`.
+- `player_agent.py`: LangChain 메시지 임포트 → `ImportError` 전용 처리.
+
+**검증**: `pytest tests/ --ignore=tests/test_mcp_memory_tools.py` (51 passed).  
+※ `test_mcp_memory_tools.py`는 `AgentMemory` 미정의로 수집 단계에서 실패 — 별도 정리 필요.
+
+---
+
+### ~~[C-15]~~ ✅ 멀티 POD 소유권 로깅 (2026-04-06)
+
+- **C-15-1** `backend/pod.py`: `MAFIA_POD_ID` → 없으면 `socket.gethostname()`, 모듈 상수 `POD_ID`.
+- **C-15-2** `main.py`: FastAPI `lifespan`으로 기동/종료 시 `pod_id`, `REDIS_URL`, `MAFIA_USE_REDIS_CHECKPOINTER`, `MAFIA_LLM_PROVIDER` 로깅.
+- **C-15-3** `registry.py`: `create_game` 성공 INFO, `get` 미스 시 WARNING (`mafia.registry`).
+- **C-15-4** `graph.py` `__init__`: AgentGraph + supervisor 3종 + agent 키 목록 INFO.
+- **C-15-5** `runner.py`: `run()` 시작 INFO, 루프마다 `Phase 전환` INFO, `advance_phase` 직후 INFO(기존 phase 로그를 POD 접두로 통합), 승리 확정 시 `게임 종료` INFO.
+- **C-15-6** `graph.py` `_issue_directives_for_phase`: 발행 시작 INFO + Citizen/Mafia/Neutral(밤능력 분기 포함) DEBUG.
+
+**설계 대비 보완**: 지시서 예시의 `run()` 종료 로그는 루프 내부 `winner` 확정 직후에 남기도록 함(기존 구조상 `while` 이후에 도달하지 않음).
+
+**인프라**: `MAFIA_POD_ID`·Sticky Session은 Claude/docker-compose 담당.
+
+---
+
+## ~~🔴 신규 작업~~ ✅ C-16/C-17/C-18 완료 (2026-04-06)
+
+---
+
+## 🔴 신규 작업 (2026-04-06 — README 점검)
+
+### [C-19] `backend/README.md` 최신화
+
+> **배경**: 루트 README 점검 결과 backend/README.md에 다음 항목이 누락/오래됨.
+> Cursor 담당 파일이므로 직접 수정 지시.
+
+#### 수정 항목 3가지
+
+**① 환경변수 테이블에 4개 추가**
+
+| 변수 | 기본값 | 설명 |
+|------|--------|------|
+| `LANGCHAIN_TRACING_V2` | `false` | `true` 설정 시 LangSmith 트레이싱 활성화 |
+| `LANGCHAIN_API_KEY` | — | LangSmith API 키 (`TRACING_V2=true` 시 사용) |
+| `LANGCHAIN_PROJECT` | `mafia-game` | LangSmith 프로젝트 이름 |
+| `MAFIA_POD_ID` | — | 멀티POD 환경 식별자 (미설정 시 hostname 자동 사용) |
+
+**② `agents/` 디렉토리 구조에 `analysis_agent.py` 추가**
+
+```
+agents/
+├── graph.py           ← LangGraph AgentGraph
+├── player_agent.py    ← 개별 AI Agent (LLM 연동)
+├── analysis_agent.py  ← GameInsightAgent (게임 결과 RAG 자기학습)  ← 추가
+├── pool.py
+└── persona.py
+```
+
+**③ `MAFIA_USE_REDIS_CHECKPOINTER` 기본값 설명 명확화**
+
+```markdown
+# 현재 (❌ 혼동 유발)
+| MAFIA_USE_REDIS_CHECKPOINTER | 0 | ...
+
+# 수정 (✅)
+| MAFIA_USE_REDIS_CHECKPOINTER | 0 (로컬) / 1 (docker-compose 자동) | ...
+```
+
+**완료 보고 형식**:
+```
+[완료] C-19 — backend/README.md 최신화
+구현 내용: ...
+```
+
+---
+
+## ~~🔴 신규 작업 (2026-04-06 — WORK_TASK_GEMINI 보고 반영)~~
+
+### [C-16] G-12 RAG 디버그 패널 — 백엔드 rag_context 연동
+
+> **배경**: Gemini가 `components/status_panel.py`에 RAG 디버그 패널 UI(G-12)를 구현 완료했으나,
+> 백엔드가 `game_state_update` WebSocket 이벤트에 `rag_context`를 포함하지 않아
+> 프론트에서 "RAG 컨텍스트 없음"만 표시됨.
+
+#### C-16-1: `backend/agents/player_agent.py` — AgentOutput에 rag_context 추가
+
+```python
+# 현재 AgentOutput
+@dataclass
+class AgentOutput:
+    speech: Optional[str]
+    action: Optional[dict]
+    vote: Optional[str]
+    internal_notes: Optional[str]
+
+# 수정: rag_context 필드 추가
+@dataclass
+class AgentOutput:
+    speech: Optional[str]
+    action: Optional[dict]
+    vote: Optional[str]
+    internal_notes: Optional[str]
+    rag_context: list[dict] = field(default_factory=list)  # RAG 참조 문서 목록
+```
+
+`PlayerAgent.run()` 내부에서 `rag_context` 값을 `AgentOutput`에 포함하여 반환할 것.
+
+#### C-16-2: `backend/game/snapshot.py` — rag_context 페이로드 포함
+
+`build_game_state_payload()` 함수가 `rag_context` 인자를 받아 페이로드에 포함하도록 확장.
+
+```python
+def build_game_state_payload(state: GameState, rag_context: list[dict] | None = None) -> dict:
+    payload = { ...기존 필드... }
+    if rag_context:
+        payload["rag_context"] = rag_context  # 최근 에이전트가 참조한 RAG 문서
+    return payload
+```
+
+#### C-16-3: `backend/game/runner.py` — 에이전트 실행 결과에서 rag_context 수집 후 브로드캐스트
+
+```python
+# runner.py — 에이전트 라운드 실행 후
+outputs: dict[str, AgentOutput] = await self.agent_graph.run_day_chat_round(state)
+
+# 최근 에이전트들의 rag_context 수집 (마지막 에이전트 기준 또는 합산)
+latest_rag_context = []
+for output in outputs.values():
+    if output.rag_context:
+        latest_rag_context = output.rag_context  # 마지막 에이전트 RAG 사용
+        break
+
+# game_state_update 브로드캐스트에 rag_context 포함
+payload = build_game_state_payload(state, rag_context=latest_rag_context)
+await self.ws_manager.broadcast(self.game_id, {"event": "game_state_update", "payload": payload})
+```
+
+**검증 방법**:
+```bash
+# 게임 실행 후 game_state_update WebSocket 이벤트 payload에 rag_context 배열 포함 확인
+# 프론트 RAG 디버그 패널에 문서 제목/점수 표시 확인
+```
+
+---
+
+### [C-17] Phase 5-8 — 슈퍼바이저 MCP 연동
+
+> **배경**: `TASK_PLAN.md` Phase 5-8 미구현 상태.
+> 현재 PlayerAgent는 MCP Tool을 직접 호출하지만 Supervisor는 MCP 미연결 상태.
+> Supervisor가 `report_to_supervisor` 도구를 통해 Agent 보고를 수신하는 구조 완성이 목표.
+
+#### 구현 목표
+
+현재 `mcp/tools.py`의 `report_to_supervisor()` 도구가 `GameState.reports`에 추가까지만 되어 있음.
+Supervisor가 이 `reports`를 실제로 읽어서 다음 Phase 지시에 반영하는 루프 완성.
+
+```python
+# supervisors/citizen.py — issue_directives()
+def issue_directives(self, state: GameState, reports: List[Report]) -> List[Directive]:
+    # 현재: reports 파라미터를 받지만 활용 여부 불명확
+    # 목표: reports에서 의심 정보 추출 → suspect 선정 로직에 반영
+    
+    # 예시: 경찰 보고서에서 마피아 확인 정보 우선 반영
+    confirmed_mafia = [
+        r for r in reports
+        if "마피아" in r.content and r.round == state.round - 1
+    ]
+    if confirmed_mafia:
+        # 확인된 마피아를 표적으로 지시
+        ...
+```
+
+**확인할 것**:
+1. `graph.py`의 `_issue_directives_for_phase()`에서 `reports`를 실제로 Supervisor에 전달하는지 확인
+2. 전달 안 되면 `state.reports`를 넘기도록 수정
+3. 각 Supervisor의 `issue_directives(reports)` 활용 로직 구현
+
+**참조**: `AGENT_DESIGN.md` §2.2 MCP Tool, `WORK_ORDER_CURSOR.md` C-2 완료 내역
+
+---
+
+### [C-18] Phase 6-7 AI vs AI 시뮬레이션 테스트 + test_mcp_memory_tools.py 정리
+
+> **배경**: `TASK_PLAN.md` Phase 6-7 미작성 + `test_mcp_memory_tools.py`가
+> `AgentMemory` 미정의로 pytest 수집 단계에서 실패 중.
+> `pytest tests/ --ignore=tests/test_mcp_memory_tools.py`로 우회 중이나 정리 필요.
+
+#### C-18-1: `backend/tests/test_mcp_memory_tools.py` — 파일 삭제 또는 skip 처리
+
+`AgentMemory` 클래스가 현재 코드베이스에 존재하지 않음. 두 가지 선택:
+- **선택 A (권장)**: 파일 삭제 — 미구현 기능의 테스트이므로 제거
+- **선택 B**: 파일 상단에 `pytest.importorskip` 또는 `@pytest.mark.skip` 적용
+
+```python
+# 선택 B 예시
+import pytest
+pytestmark = pytest.mark.skip(reason="AgentMemory 미구현 — Phase 9 예정")
+```
+
+#### C-18-2: `backend/tests/test_ai_simulation.py` — AI vs AI 헤드리스 시뮬레이션 테스트 신규 작성
+
+`MAFIA_USE_LLM=0` 환경에서 AI끼리 게임을 완주하는 스모크 테스트:
+
+```python
+# test_ai_simulation.py
+import pytest
+import asyncio
+from backend.game.runner import GameRunner
+from backend.game.engine import GameEngine
+# ...
+
+@pytest.mark.asyncio
+async def test_ai_vs_ai_full_game():
+    """AI 전원(6인) 게임이 최대 10라운드 내 정상 종료되는지 확인"""
+    engine = GameEngine(...)
+    runner = GameRunner(engine=engine, ...)
+    
+    await asyncio.wait_for(runner.run(), timeout=60)  # 60초 타임아웃
+    
+    assert engine.state.winner is not None, "게임이 승리 조건 없이 종료됨"
+    assert engine.state.winner in ("mafia", "citizen", "neutral")
+```
+
+**참조**: `backend/tests/test_mcp_memory_tools.py` 기존 패턴, `TASK_PLAN.md` Phase 6-7
+
+**검증 방법**:
+```bash
+MAFIA_USE_LLM=0 pytest backend/tests/ -v
+# test_mcp_memory_tools.py 관련 에러 없이 전체 통과 확인
+```
+
+**완료 보고 형식**:
+```
+[완료] C-16 — rag_context 백엔드 연동
+[완료] C-17 — 슈퍼바이저 MCP report 활용
+[완료] C-18 — AI vs AI 시뮬 테스트 + test_mcp_memory_tools 정리
+구현 내용: ...
+설계와 다르게 구현한 부분: ...
+Claude에게 요청 필요한 사항: ...
+```
 
 ---
 
