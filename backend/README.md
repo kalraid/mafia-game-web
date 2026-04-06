@@ -56,12 +56,22 @@ AOAI_API_VERSION=2024-02-01
 AOAI_DEPLOY_GPT4O=          # 채팅 배포 이름
 MAFIA_USE_LLM=1              # 0: LLM 비활성화
 REDIS_URL=redis://localhost:6379
-MAFIA_USE_REDIS_CHECKPOINTER=0  # 1: Redis Checkpointer 활성화
+# 로컬 기본 0(메모리). docker-compose의 backend 서비스는 MAFIA_USE_REDIS_CHECKPOINTER=1 로 설정됨.
+MAFIA_USE_REDIS_CHECKPOINTER=0
 CHROMA_PERSIST_DIR=./backend/rag/chroma_db
 RAG_KNOWLEDGE_DIR=./backend/rag/knowledge
 EMBEDDING_MODEL=sentence-transformers/paraphrase-multilingual-mpnet-base-v2
 PORT=8000
 ```
+
+### LangSmith · 멀티 POD (선택)
+
+| 변수 | 기본값 | 설명 |
+|------|--------|------|
+| `LANGCHAIN_TRACING_V2` | `false` | `true`이면 LangSmith 트레이싱 활성화 (`main.py`에서 프로젝트 설정) |
+| `LANGCHAIN_API_KEY` | — | LangSmith API 키 (`TRACING_V2=true`일 때) |
+| `LANGCHAIN_PROJECT` | `mafia-game` | LangSmith 프로젝트 이름 |
+| `MAFIA_POD_ID` | — | 멀티 POD 식별자. 미설정 시 `backend/pod.py`가 hostname 사용 |
 
 ---
 
@@ -93,6 +103,7 @@ backend/
 ├── agents/
 │   ├── graph.py           ← LangGraph AgentGraph
 │   ├── player_agent.py    ← 개별 AI Agent (LLM 연동)
+│   ├── analysis_agent.py  ← GameInsightAgent (게임 종료 후 RAG 자기학습)
 │   ├── persona.py
 │   └── pool.py
 ├── game/

@@ -13,6 +13,7 @@ import pytest
 pytest.importorskip("chromadb")
 pytest.importorskip("sentence_transformers")
 
+from backend.agents.player_agent import PlayerAgent
 from backend.game.registry import GameRegistry
 from backend.game.runner import GameRunner
 from backend.websocket.events import ServerToClientEvent
@@ -33,6 +34,11 @@ def test_headless_ai_game_reaches_winner(monkeypatch: pytest.MonkeyPatch) -> Non
         return None
 
     monkeypatch.setattr(asyncio, "sleep", _immediate_sleep)
+
+    # RAG(Chroma 인덱싱·검색)는 턴 수가 많은 헤드리스 루프에서 180s 타임아웃을 자주 유발한다.
+    # 본 테스트는 "게임 종료(winner)" 스모크이므로 검색은 끈다.
+    PlayerAgent._rag_retriever = None
+    monkeypatch.setattr(PlayerAgent, "_get_rag_retriever", lambda self: None)
 
     registry = GameRegistry()
     gid = "ai_vs_ai_smoke"

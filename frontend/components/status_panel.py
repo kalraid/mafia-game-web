@@ -284,13 +284,51 @@ def draw_status_panel():
     st.caption(f"{provider_info['icon']} LLM Provider")
     st.markdown(f"![{provider}](https://img.shields.io/badge/LLM-{provider_info['label'].replace(' ', '%20')}-{provider_info['color']}?style=flat-square)")
 
+    def _format_rag_hit(item: object) -> str:
+        if isinstance(item, dict):
+            text = str(item.get("text", "")).strip()
+            score = item.get("score")
+            meta = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
+            title = str(meta.get("title") or meta.get("file") or "문서").strip() or "문서"
+            score_s = f"{float(score):.4f}" if isinstance(score, (int, float)) else str(score)
+            preview = text[:800] + ("…" if len(text) > 800 else "")
+            return f"**{title}** (유사도 {score_s})\n\n{preview}"
+        return str(item)
+
     with st.expander("🔍 RAG 컨텍스트 (디버그)"):
         rag_ctx = game_state.get("rag_context", [])
         if rag_ctx:
             for i, ctx in enumerate(rag_ctx):
-                st.markdown(f"**{i+1}.** {ctx}")
+                st.markdown(f"**{i + 1}.** {_format_rag_hit(ctx)}")
         else:
-            st.caption("RAG 컨텍스트 없음")
+            st.caption("RAG 컨텍스트 없음 (AI 턴 이후 `game_state_update`에 포함됩니다)")
+
+    with st.expander("🎛️ 슈퍼바이저 / MCP (디버그)"):
+        directives = game_state.get("debug_directives", [])
+        reports = game_state.get("debug_reports", [])
+        if not directives and not reports:
+            st.caption("지시문·보고 없음 (`report_to_supervisor` 및 Phase 진입 시 갱신)")
+        if reports:
+            st.markdown("**에이전트 → 슈퍼바이저 보고 (reports)**")
+            for i, r in enumerate(reports):
+                if isinstance(r, dict):
+                    st.code(
+                        f"[{i + 1}] round={r.get('round')} agent={r.get('agent_id')}\n{r.get('content', '')}",
+                        language=None,
+                    )
+                else:
+                    st.write(r)
+        if directives:
+            st.markdown("**슈퍼바이저 지시 (directives)**")
+            for i, d in enumerate(directives):
+                if isinstance(d, dict):
+                    st.code(
+                        f"[{i + 1}] → {d.get('target_agent')} ({d.get('type')}, {d.get('priority')})\n"
+                        f"{d.get('content', '')}",
+                        language=None,
+                    )
+                else:
+                    st.write(d)
 
 if __name__ == "__main__":
     st.session_state.game_state = {

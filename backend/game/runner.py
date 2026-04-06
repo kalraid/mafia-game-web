@@ -137,6 +137,10 @@ class GameRunner:
         }
         if "rag_context" in payload:
             gs_payload["rag_context"] = payload["rag_context"]
+        if "debug_directives" in payload:
+            gs_payload["debug_directives"] = payload["debug_directives"]
+        if "debug_reports" in payload:
+            gs_payload["debug_reports"] = payload["debug_reports"]
         await self.ws_manager.broadcast(
             self.game_id,
             ServerToClientEvent(

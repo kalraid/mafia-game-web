@@ -78,5 +78,14 @@ def build_game_state_payload(
     }
     if rag_context:
         payload["rag_context"] = rag_context
+
+    # 프론트 디버그 패널: 슈퍼바이저 지시 + MCP report_to_supervisor 적재분
+    if engine.state.directives:
+        payload["debug_directives"] = [
+            d.model_dump(mode="json", by_alias=True) for d in engine.state.directives
+        ]
+    if engine.state.reports:
+        payload["debug_reports"] = [r.model_dump(mode="json") for r in engine.state.reports]
+
     return payload
 

@@ -137,10 +137,13 @@ frontend/
 ### 1. 게임 생성 (G-13-4)
 로비(`pages/lobby.py`)에서 닉네임과 인원수를 설정한 후 "게임 시작" 버튼을 누르면 백엔드에 게임 생성을 요청합니다. 성공 시 발급된 `game_id`를 기반으로 게임 화면으로 이동합니다.
 
-### 2. RAG 디버그 패널 (G-12)
-상태창(`components/status_panel.py`) 하단에 AI Agent가 참조한 RAG 컨텍스트를 실시간으로 확인할 수 있는 디버그 패널이 포함되어 있습니다. 이는 개발 및 테스트 단계에서 AI의 의사결정 근거를 확인하는 용도로 사용됩니다.
+### 2. RAG · 슈퍼바이저 / MCP 디버그 패널 (G-12, C-16/C-17)
+상태창(`components/status_panel.py`) 하단 **「RAG 컨텍스트 (디버그)」** expander에서 AI가 참조한 `rag_context` 히트를 확인할 수 있습니다. **「슈퍼바이저 / MCP (디버그)」** expander에서는 `game_state_update`에 실리는 `debug_directives`(슈퍼바이저 지시)와 `debug_reports`(`report_to_supervisor` 적재분)를 볼 수 있습니다.
 
-### 3. WebSocket 핸들러 (app.py)
+### 3. 서버 상태 모니터링 (G-15, G-16) — G-17
+상태창에서 백엔드 연결 여부와 `GET /health`의 `rag_status` 뱃지를 표시합니다. **G-16**: 동일 영역에 LLM Provider 뱃지를 표시하며, 값은 `anthropic` / `azure` / `disabled` / `fallback` 중 하나입니다(헬스 응답의 `llm_provider`와 동기).
+
+### 4. WebSocket 핸들러 (app.py)
 `streamlit-websocket-client`를 통해 백엔드와 실시간으로 통신하며, 수신된 이벤트에 따라 세션 상태(`st.session_state.game_state`)를 업데이트하고 화면을 자동으로 갱신(Rerun)합니다.
 
 ---
