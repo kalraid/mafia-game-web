@@ -62,7 +62,7 @@ def test_player_agent_tool_exec_submit_vote_uses_agent_id(monkeypatch: pytest.Mo
     monkeypatch.setattr(langchain_anthropic, "ChatAnthropic", FakeChatAnthropic)
 
     agent_input = AgentInput(game_state=state, my_state=state.players[0], supervisor_directive=None)
-    decision, executed_any = asyncio.run(agent._decide_with_llm(agent_input))
+    decision, executed_any, _rag = asyncio.run(agent._decide_with_llm(agent_input))
 
     assert executed_any is True
     assert decision.vote_target == "p2"

@@ -48,3 +48,4 @@ def test_headless_ai_game_reaches_winner(monkeypatch: pytest.MonkeyPatch) -> Non
     asyncio.run(_run())
 
     assert engine.state.winner is not None
+    assert engine.state.winner in ("citizen", "mafia", "jester")

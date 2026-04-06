@@ -45,6 +45,7 @@ def build_game_state_payload(
     engine: GameEngine,
     *,
     death_info: Dict[str, Dict[str, Any]] | None = None,
+    rag_context: list[dict] | None = None,
 ) -> Dict[str, Any]:
     """
     프론트엔드(status_panel/result 페이지)가 바로 consume할 payload를 생성합니다.
@@ -68,11 +69,14 @@ def build_game_state_payload(
         }
         players.append(player_dict)
 
-    return {
+    payload: Dict[str, Any] = {
         "players": players,
         "phase": ui_phase(engine.state.phase),
         "round": engine.state.round,
         "timer_seconds": engine.state.timer_seconds,
         "winner": engine.state.winner,
     }
+    if rag_context:
+        payload["rag_context"] = rag_context
+    return payload
 

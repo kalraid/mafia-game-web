@@ -12,6 +12,9 @@ class NeutralSupervisor:
 
     def issue_directives(self, state: GameState, reports: List[Report]) -> List[Directive]:
         directives: List[Directive] = []
+        heat_on_spy = any(
+            ("스파이" in (r.content or "")) or ("spy" in (r.content or "").lower()) for r in reports
+        )
 
         for p in state.players:
             if not p.is_alive:
@@ -29,12 +32,17 @@ class NeutralSupervisor:
                     )
                 )
             elif p.role == Role.SPY:
+                spy_extra = (
+                    " 최근 보고에서 스파이 노출 위험이 언급됐다. 더욱 은밀히 행동해라."
+                    if heat_on_spy
+                    else ""
+                )
                 directives.append(
                     Directive(
                         target_agent=p.id,
                         from_=self.supervisor_id,
                         type="speech_strategy",
-                        content="너무 튀지 않게, 정보를 모으면서 조용히 생존을 우선해라.",
+                        content="너무 튀지 않게, 정보를 모으면서 조용히 생존을 우선해라." + spy_extra,
                         priority="medium",
                         round=state.round,
                     )

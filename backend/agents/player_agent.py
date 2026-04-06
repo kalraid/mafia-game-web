@@ -3,8 +3,8 @@ from __future__ import annotations
 import asyncio
 import os
 import random
-from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional
 
 from backend.agents.persona import AgentPersona
 from backend.rag.retriever import SituationDescription, StrategyRetriever
@@ -39,12 +39,30 @@ class AgentInput:
     chat_history_limit: int = 20
 
 
+def _rag_hits_for_client(raw: List[dict]) -> List[dict]:
+    """WebSocket/JSON용으로 RAG hit를 직렬화 가능한 dict로 정규화한다."""
+    out: List[dict] = []
+    for item in raw:
+        meta = item.get("metadata") or {}
+        if not isinstance(meta, dict):
+            meta = {}
+        out.append(
+            {
+                "text": str(item.get("text", "")),
+                "score": float(item.get("score", 0.0)),
+                "metadata": {str(k): str(v) for k, v in meta.items()},
+            }
+        )
+    return out
+
+
 @dataclass
 class AgentOutput:
     speech: Optional[str]
     action: Optional[dict]
     vote: Optional[str]
     internal_notes: Optional[str]
+    rag_context: List[dict] = field(default_factory=list)
 
 
 class PlayerAgent:
@@ -83,9 +101,36 @@ class PlayerAgent:
         except Exception:
             return None
 
+    def _fetch_rag_context_raw(self, agent_input: AgentInput) -> list[dict]:
+        """LLM 가용 여부와 무관하게 RAG 히트를 가져온다(디버그 패널·프롬프트 공용)."""
+        game_state = agent_input.game_state
+        phase = game_state.phase
+        directive_hint = agent_input.supervisor_directive or ""
+        my_role = self.player.role.value
+        rag_context: list[dict] = []
+        try:
+            retriever = self._get_rag_retriever()
+            if retriever is not None:
+                alive_players = [p for p in game_state.players if p.is_alive]
+                mafia_count = sum(1 for p in alive_players if p.team.value == "mafia")
+                citizen_count = sum(1 for p in alive_players if p.team.value != "mafia")
+                situation_text = (
+                    f"game_id={game_state.game_id}, phase={phase.value}, round={game_state.round}. "
+                    f"alive: mafia={mafia_count}, citizen_or_neutral={citizen_count}. "
+                    f"my_role={my_role}. directive_hint={directive_hint[:200]}"
+                )
+                rag_context = retriever.retrieve_strategies(
+                    situation=SituationDescription(text=situation_text),
+                    k=3,
+                )
+        except Exception:
+            rag_context = []
+        return rag_context
+
     async def run(self, agent_input: AgentInput) -> AgentOutput:
         # Phase 2 핵심: LLM 연동(키가 없으면 안전 폴백)
-        decision, executed_tools = await self._decide_with_llm(agent_input)
+        decision, executed_tools, rag_context = await self._decide_with_llm(agent_input)
+        rag_safe = _rag_hits_for_client(rag_context)
 
         # Tool을 통해 GameState를 이미 갱신한 경우, 여기서는 output 필드를 비워
         # AgentGraph의 수동 MCP 호출(중복 반영)을 막는다.
@@ -95,6 +140,7 @@ class PlayerAgent:
                 action=None,
                 vote=None,
                 internal_notes=decision.reasoning,
+                rag_context=rag_safe,
             )
 
         # Phase별로 허용된 필드만 남겨서 "엉뚱한 행동"이 섞이지 않게 가드.
@@ -130,6 +176,7 @@ class PlayerAgent:
             ),
             vote=vote_target,
             internal_notes=decision.reasoning,
+            rag_context=rag_safe,
         )
 
         # C-2: AgentGraph에서 수동 MCP 호출을 제거했으므로,
@@ -159,13 +206,12 @@ class PlayerAgent:
 
         return out
 
-    async def _decide_with_llm(self, agent_input: AgentInput) -> tuple[AgentDecision, bool]:
+    async def _decide_with_llm(self, agent_input: AgentInput) -> tuple[AgentDecision, bool, list[dict]]:
         phase = agent_input.game_state.phase
         game_state = agent_input.game_state
 
         # 기본 후보(스텁용)
         alive_ids = [p.id for p in game_state.players if p.is_alive]
-        ai_alive_ids = [p.id for p in game_state.players if p.is_alive and not p.is_human]
 
         def fallback() -> AgentDecision:
             if phase == Phase.DAY_CHAT:
@@ -213,20 +259,22 @@ class PlayerAgent:
         # CI/테스트에서는 LLM 호출을 강제로 끄고(폴백 사용), 실제 게임 진행에서는 켤 수 있게 제어.
         # - CI가 설정된 경우: 폴백 전용
         # - MAFIA_USE_LLM=0/false/no: 폴백 전용
+        rag_context = self._fetch_rag_context_raw(agent_input)
+
         use_llm_flag = os.getenv("MAFIA_USE_LLM", "1").strip().lower()
         llm_disabled = os.getenv("CI") is not None or use_llm_flag in {"0", "false", "no"}
         if llm_disabled:
-            return fallback(), False
+            return fallback(), False, rag_context
 
         llm = get_chat_llm(temperature=0)
         if llm is None:
-            return fallback(), False
+            return fallback(), False, rag_context
 
         try:
             from langchain_core.messages import SystemMessage, HumanMessage
             from langchain_core.tools import tool
         except Exception:
-            return fallback(), False
+            return fallback(), False, rag_context
 
         # Phase별 간단한 출력 스키마 유도 (structured output 경로용)
         structured_system_prompt = (
@@ -248,26 +296,6 @@ class PlayerAgent:
 
         available_players = ", ".join(alive_ids) if alive_ids else "(none)"
         my_role = self.player.role.value
-
-        # RAG 컨텍스트 주입(문서가 없으면 빈 결과 → fallback처럼 동작)
-        rag_context: list[dict] = []
-        try:
-            retriever = self._get_rag_retriever()
-            if retriever is not None:
-                alive_players = [p for p in game_state.players if p.is_alive]
-                mafia_count = sum(1 for p in alive_players if p.team.value == "mafia")
-                citizen_count = sum(1 for p in alive_players if p.team.value != "mafia")
-                situation_text = (
-                    f"game_id={game_state.game_id}, phase={phase.value}, round={game_state.round}. "
-                    f"alive: mafia={mafia_count}, citizen_or_neutral={citizen_count}. "
-                    f"my_role={my_role}. directive_hint={directive_hint[:200]}"
-                )
-                rag_context = retriever.retrieve_strategies(
-                    situation=SituationDescription(text=situation_text),
-                    k=3,
-                )
-        except Exception:
-            rag_context = []
 
         phase_instruction = ""
         if phase == Phase.DAY_CHAT:
@@ -399,14 +427,14 @@ class PlayerAgent:
 
                 decision = self._decision_from_tool_calls(tool_calls=tool_calls, phase=phase)
                 if decision is not None and executed_any:
-                    return decision, True
+                    return decision, True, rag_context
 
             structured_llm = llm.with_structured_output(AgentDecision)
             messages = [SystemMessage(content=structured_system_prompt), HumanMessage(content=str(human_prompt))]
-            decision: AgentDecision = await asyncio.to_thread(structured_llm.invoke, messages)
-            return decision, False
+            decision = await asyncio.to_thread(structured_llm.invoke, messages)
+            return decision, False, rag_context
         except Exception:
-            return fallback(), False
+            return fallback(), False, rag_context
 
     def _decision_from_tool_calls(self, tool_calls: list[dict], phase: Phase) -> AgentDecision | None:
         if not tool_calls:

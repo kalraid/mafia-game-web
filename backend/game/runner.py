@@ -5,6 +5,7 @@ import os
 from typing import Any, Dict, Optional
 
 from backend.agents.graph import AgentGraph
+from backend.agents.player_agent import AgentOutput
 from backend.agents.pool import AgentPool
 from backend.game.engine import GameEngine
 from backend.game.snapshot import build_game_state_payload, role_to_korean
@@ -30,6 +31,9 @@ class GameRunner:
 
         # 프론트 result 페이지용 사망 정보
         self._death_info: Dict[str, Dict[str, Any]] = {}
+
+        # G-12 / C-16: 마지막 AI 턴에서 참조한 RAG 히트(디버그 패널)
+        self._latest_rag_context: list[dict] = []
 
         self._task: asyncio.Task | None = None
 
@@ -57,7 +61,8 @@ class GameRunner:
             await self._broadcast_phase_state()
 
             # AI 행동 실행
-            await self._run_agents_for_current_phase()
+            outputs = await self._run_agents_for_current_phase()
+            self._merge_rag_from_outputs(outputs)
 
             # agent 실행 후 채팅/투표 반영 브로드캐스트
             await self._broadcast_new_chats()
@@ -87,22 +92,33 @@ class GameRunner:
                     pass
                 return
 
-    async def _run_agents_for_current_phase(self) -> None:
+    def _merge_rag_from_outputs(self, outputs: Dict[str, AgentOutput]) -> None:
+        """실행 순서대로 마지막 비어 있지 않은 rag_context를 유지한다."""
+        for out in outputs.values():
+            if out.rag_context:
+                self._latest_rag_context = list(out.rag_context)
+
+    async def _run_agents_for_current_phase(self) -> Dict[str, AgentOutput]:
         if self.agent_graph is None:
-            return
+            return {}
 
         phase = self.engine.state.phase
         if phase == Phase.DAY_CHAT:
-            await self.agent_graph.run_day_chat_round(self.engine.state)
-        elif phase in (Phase.DAY_VOTE, Phase.FINAL_VOTE):
-            await self.agent_graph.run_vote_round(self.engine.state)
-        elif phase == Phase.NIGHT_MAFIA:
-            await self.agent_graph.run_night_mafia_round(self.engine.state)
-        elif phase == Phase.NIGHT_ABILITY:
-            await self.agent_graph.run_night_ability_round(self.engine.state)
+            return await self.agent_graph.run_day_chat_round(self.engine.state)
+        if phase in (Phase.DAY_VOTE, Phase.FINAL_VOTE):
+            return await self.agent_graph.run_vote_round(self.engine.state)
+        if phase == Phase.NIGHT_MAFIA:
+            return await self.agent_graph.run_night_mafia_round(self.engine.state)
+        if phase == Phase.NIGHT_ABILITY:
+            return await self.agent_graph.run_night_ability_round(self.engine.state)
+        return {}
 
     async def _broadcast_phase_state(self) -> None:
-        payload = build_game_state_payload(self.engine, death_info=self._death_info)
+        payload = build_game_state_payload(
+            self.engine,
+            death_info=self._death_info,
+            rag_context=self._latest_rag_context or None,
+        )
 
         # phase_change
         await self.ws_manager.broadcast(
@@ -113,16 +129,19 @@ class GameRunner:
             ),
         )
         # game_state_update
+        gs_payload: Dict[str, Any] = {
+            "players": payload["players"],
+            "phase": payload["phase"],
+            "round": payload["round"],
+            "timer_seconds": payload["timer_seconds"],
+        }
+        if "rag_context" in payload:
+            gs_payload["rag_context"] = payload["rag_context"]
         await self.ws_manager.broadcast(
             self.game_id,
             ServerToClientEvent(
                 event="game_state_update",
-                payload={
-                    "players": payload["players"],
-                    "phase": payload["phase"],
-                    "round": payload["round"],
-                    "timer_seconds": payload["timer_seconds"],
-                },
+                payload=gs_payload,
             ),
         )
 

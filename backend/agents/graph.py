@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import random
 from typing import Dict, Optional, TypedDict
 
+logger = logging.getLogger("mafia.backend.agents.graph")
+
 from backend.agents.player_agent import AgentInput, AgentOutput, PlayerAgent
 from backend.game.engine import GameEngine
+from backend.pod import POD_ID
 from backend.supervisors.citizen import CitizenSupervisor
 from backend.supervisors.mafia import MafiaSupervisor
 from backend.supervisors.neutral import NeutralSupervisor
@@ -35,14 +39,27 @@ class AgentGraph:
         self.mafia_supervisor = mafia_supervisor or MafiaSupervisor()
         self.neutral_supervisor = neutral_supervisor or NeutralSupervisor()
 
+        logger.info(
+            "[POD=%s] AgentGraph 초기화 — game_id=%s"
+            " supervisors=[CitizenSupervisor, MafiaSupervisor, NeutralSupervisor]"
+            " agents=%s  ← 이 POD가 전담 실행",
+            POD_ID,
+            engine.state.game_id,
+            list(agents.keys()),
+        )
+
         class _AgentCallState(TypedDict):
             agent_id: str
             supervisor_directive: Optional[str]
             agent_output: Dict[str, object]
 
         async def _run_agent_node(state: _AgentCallState) -> Dict[str, Dict[str, object]]:
-            agent_id = state["agent_id"]
-            agent = self.agents[agent_id]
+            agent_id = state.get("agent_id", "")
+            if not agent_id:
+                raise ValueError("_run_agent_node: agent_id가 비어 있습니다.")
+            agent = self.agents.get(agent_id)
+            if agent is None:
+                raise ValueError(f"_run_agent_node: 알 수 없는 agent_id={agent_id!r}")
             agent_input = AgentInput(
                 game_state=self.engine.state,
                 my_state=agent.player,
@@ -55,6 +72,7 @@ class AgentGraph:
                     "action": output.action,
                     "vote": output.vote,
                     "internal_notes": output.internal_notes,
+                    "rag_context": output.rag_context,
                 }
             }
 
@@ -102,6 +120,16 @@ class AgentGraph:
         (현재는 L2 Redis/A2A 루프까지는 아니고, Agent 입력 주입만 MVP로 연결)
         """
         state.directives = []
+        reports_snapshot = list(state.reports)
+
+        logger.info(
+            "[POD=%s] Supervisor 지시문 발행 — game_id=%s phase=%s round=%d"
+            " citizen_supervisor=active mafia_supervisor=active neutral_supervisor=active",
+            POD_ID,
+            state.game_id,
+            state.phase.value,
+            state.round,
+        )
 
         # Day 계열: speech/vote 모두 동일하게 시민/마피아/중립 지시를 먼저 주입
         if state.phase in (
@@ -110,26 +138,83 @@ class AgentGraph:
             Phase.FINAL_SPEECH,
             Phase.FINAL_VOTE,
         ):
-            state.directives.extend(self.citizen_supervisor.issue_directives(state, reports=[]))
-            state.directives.extend(self.mafia_supervisor.issue_concealment_directives(state))
-            state.directives.extend(self.neutral_supervisor.issue_directives(state, reports=[]))
+            directives = self.citizen_supervisor.issue_directives(state, reports=reports_snapshot)
+            logger.debug(
+                "[POD=%s] CitizenSupervisor → directives=%d targets=%s",
+                POD_ID,
+                len(directives),
+                [d.target_agent for d in directives],
+            )
+            state.directives.extend(directives)
+
+            directives = self.mafia_supervisor.issue_concealment_directives(state, reports=reports_snapshot)
+            logger.debug(
+                "[POD=%s] MafiaSupervisor → directives=%d targets=%s",
+                POD_ID,
+                len(directives),
+                [d.target_agent for d in directives],
+            )
+            state.directives.extend(directives)
+
+            directives = self.neutral_supervisor.issue_directives(state, reports=reports_snapshot)
+            logger.debug(
+                "[POD=%s] NeutralSupervisor → directives=%d targets=%s",
+                POD_ID,
+                len(directives),
+                [d.target_agent for d in directives],
+            )
+            state.directives.extend(directives)
             return
 
         # Night 계열: 마피아 협의 (NIGHT_MAFIA) / 능력 사용 (NIGHT_ABILITY)
         if state.phase == Phase.NIGHT_MAFIA:
             # 마피아 쪽만 실제로 발언하도록 GameRunner/실행 로직에서 필터링한다.
             # 여기서는 마피아가 참고할 전략/은폐 지시를 우선 주입한다.
-            state.directives.extend(self.mafia_supervisor.issue_concealment_directives(state))
+            directives = self.mafia_supervisor.issue_concealment_directives(state, reports=reports_snapshot)
+            logger.debug(
+                "[POD=%s] MafiaSupervisor → directives=%d targets=%s",
+                POD_ID,
+                len(directives),
+                [d.target_agent for d in directives],
+            )
+            state.directives.extend(directives)
             return
 
         if state.phase == Phase.NIGHT_ABILITY:
             # citizen/mafia/neutral이 ability_strategy directive를 생성하도록 확장 예정
             if hasattr(self.citizen_supervisor, "issue_night_ability_directives"):
-                state.directives.extend(self.citizen_supervisor.issue_night_ability_directives(state, reports=[]))  # type: ignore[attr-defined]
+                directives = self.citizen_supervisor.issue_night_ability_directives(  # type: ignore[attr-defined]
+                    state, reports=reports_snapshot
+                )
+                logger.debug(
+                    "[POD=%s] CitizenSupervisor(night_ability) → directives=%d targets=%s",
+                    POD_ID,
+                    len(directives),
+                    [d.target_agent for d in directives],
+                )
+                state.directives.extend(directives)
             if hasattr(self.mafia_supervisor, "issue_night_ability_directives"):
-                state.directives.extend(self.mafia_supervisor.issue_night_ability_directives(state))  # type: ignore[attr-defined]
+                directives = self.mafia_supervisor.issue_night_ability_directives(  # type: ignore[attr-defined]
+                    state, reports=reports_snapshot
+                )
+                logger.debug(
+                    "[POD=%s] MafiaSupervisor(night_ability) → directives=%d targets=%s",
+                    POD_ID,
+                    len(directives),
+                    [d.target_agent for d in directives],
+                )
+                state.directives.extend(directives)
             if hasattr(self.neutral_supervisor, "issue_night_ability_directives"):
-                state.directives.extend(self.neutral_supervisor.issue_night_ability_directives(state, reports=[]))  # type: ignore[attr-defined]
+                directives = self.neutral_supervisor.issue_night_ability_directives(  # type: ignore[attr-defined]
+                    state, reports=reports_snapshot
+                )
+                logger.debug(
+                    "[POD=%s] NeutralSupervisor(night_ability) → directives=%d targets=%s",
+                    POD_ID,
+                    len(directives),
+                    [d.target_agent for d in directives],
+                )
+                state.directives.extend(directives)
             return
 
         # 그 외 phase는 directive 없음
@@ -163,6 +248,7 @@ class AgentGraph:
         - '마피아/mafia' 언급: trust_score 낮춤
         - '시민/citizen' 언급: trust_score 올림
         """
+        logger.info("supervisor_replan round=%s", state.round)
         if not state.reports:
             return
 
@@ -192,6 +278,11 @@ class AgentGraph:
         state.reports = []
 
     async def _invoke_agent(self, state: GameState, agent_id: str) -> AgentOutput:
+        logger.info(
+            "invoke agent=%s phase=%s",
+            agent_id,
+            getattr(state.phase, "value", state.phase),
+        )
         config = {"configurable": {"thread_id": f"{state.game_id}_{agent_id}"}}
         graph_state = await self._agent_call_graph.ainvoke(
             {
@@ -203,11 +294,17 @@ class AgentGraph:
         out = graph_state.get("agent_output", {})
         if not isinstance(out, dict):
             out = {}
+        rc = out.get("rag_context")
+        rag_list: list[dict] = []
+        if isinstance(rc, list):
+            rag_list = [x for x in rc if isinstance(x, dict)]
+
         return AgentOutput(
             speech=out.get("speech") if isinstance(out.get("speech"), str) else None,
             action=out.get("action") if isinstance(out.get("action"), dict) else None,
             vote=out.get("vote") if isinstance(out.get("vote"), str) else None,
             internal_notes=out.get("internal_notes") if isinstance(out.get("internal_notes"), str) else None,
+            rag_context=rag_list,
         )
 
     async def run_day_chat_round(self, state: GameState) -> Dict[str, AgentOutput]:
