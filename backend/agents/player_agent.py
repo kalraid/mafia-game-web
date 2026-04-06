@@ -286,6 +286,7 @@ class PlayerAgent:
         tool_system_prompt = (
             "너는 AI 마피아 게임 에이전트다. 반드시 제공된 tool을 호출해 게임 상태를 변경하라."
             " tool 외의 일반 텍스트는 출력하지 말라."
+            " report_to_supervisor(report)는 슈퍼바이저 전략 반영용 선택 도구이며, 남용하지 말라."
         )
 
         directive_hint = agent_input.supervisor_directive or ""
@@ -323,6 +324,18 @@ class PlayerAgent:
                 )
         else:
             phase_instruction = "현재 Phase에 맞는 행동을 선택해라. 해당 필드만 채우고 나머지는 null로 둬라."
+
+        if phase in {
+            Phase.DAY_CHAT,
+            Phase.DAY_VOTE,
+            Phase.FINAL_VOTE,
+            Phase.NIGHT_MAFIA,
+            Phase.NIGHT_ABILITY,
+        }:
+            phase_instruction += (
+                " 필요 시 report_to_supervisor(report=...) 도구로 슈퍼바이저에 짧은 관찰·의심을 보고할 수 있다."
+                " 턴당 최대 1회 권장이며, 빈 보고·무의미한 반복 호출은 하지 말라."
+            )
 
         human_prompt = {
             "persona": {
@@ -378,6 +391,16 @@ class PlayerAgent:
                     )
                     return True
 
+                def _report_to_supervisor(report: str) -> bool:
+                    text = str(report).strip()
+                    if not text:
+                        return False
+                    self.mcp_tools.report_to_supervisor(
+                        agent_id=self.player.id,
+                        report=text[:4000],
+                    )
+                    return True
+
                 @tool
                 def send_chat(content: str) -> bool:
                     """발언을 전송한다."""
@@ -393,7 +416,12 @@ class PlayerAgent:
                     """능력을 사용한다."""
                     return _use_ability(ability, target_id)
 
-                tool_llm = llm.bind_tools([send_chat, submit_vote, use_ability])
+                @tool
+                def report_to_supervisor(report: str) -> bool:
+                    """슈퍼바이저에게 관찰·의심 정보를 짧게 보고한다. 남용하지 말 것."""
+                    return _report_to_supervisor(report)
+
+                tool_llm = llm.bind_tools([send_chat, submit_vote, use_ability, report_to_supervisor])
                 tool_messages = [SystemMessage(content=tool_system_prompt), HumanMessage(content=str(human_prompt))]
                 tool_msg = await asyncio.to_thread(tool_llm.invoke, tool_messages)
                 tool_calls = getattr(tool_msg, "tool_calls", []) or []
@@ -420,6 +448,20 @@ class PlayerAgent:
                         ):
                             _use_ability(str(args["ability"]).strip(), str(args["target_id"]).strip())
                             executed_any = True
+                        elif (
+                            name == "report_to_supervisor"
+                            and "report" in args
+                            and phase
+                            in (
+                                Phase.DAY_CHAT,
+                                Phase.DAY_VOTE,
+                                Phase.FINAL_VOTE,
+                                Phase.NIGHT_MAFIA,
+                                Phase.NIGHT_ABILITY,
+                            )
+                        ):
+                            if _report_to_supervisor(str(args["report"])):
+                                executed_any = True
                     except Exception:
                         # 도구 실행 실패는 폴백으로 처리한다.
                         executed_any = False
